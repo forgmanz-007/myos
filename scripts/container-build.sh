@@ -37,10 +37,17 @@ fi
 
 # ── Build tools ─────────────────────────────────────────────────────────────
 export DEBIAN_FRONTEND=noninteractive
-if ! command -v lb >/dev/null 2>&1; then
-    log "Installing live-build"
+# live-build and the helpers it recommends that this build uses (apt-utils: apt-ftparchive puts
+# the installer's bootloader packages on the ISO). Checked every time, also for --native builds.
+NEED=(live-build debootstrap ca-certificates curl apt-utils bzip2 file rsync wget xz-utils)
+MISSING=()
+for p in "${NEED[@]}"; do
+    dpkg -s "$p" >/dev/null 2>&1 || MISSING+=("$p")
+done
+if [ ${#MISSING[@]} -gt 0 ]; then
+    log "Installing build tools: ${MISSING[*]}"
     apt-get update -q
-    apt-get install -y -q --no-install-recommends live-build debootstrap ca-certificates curl
+    apt-get install -y -q --no-install-recommends "${MISSING[@]}"
 fi
 . /etc/os-release
 if [ "${VERSION_CODENAME:-}" != "$DEBIAN_RELEASE" ]; then
