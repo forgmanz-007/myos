@@ -1,3 +1,5 @@
-Package: linux-image-* linux-headers-* linux-kbuild-* linux-compiler-* firmware-*
+Explanation: The newer kernel and firmware from backports (KERNEL="backports" in config.env).
+Explanation: The backports kernel also needs the newer linux-base from there (Linux 7.2: 4.17).
+Package: linux-base linux-image-* linux-headers-* linux-kbuild-* linux-compiler-* firmware-*
 Pin: release n=trixie-backports
 Pin-Priority: 900
