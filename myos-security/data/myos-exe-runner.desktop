@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Windows Program (virus-checked)
+Comment=Check for viruses, then run with Wine or Proton
+Exec=myos-run-exe %f
+Icon=application-x-ms-dos-executable
+Terminal=false
+NoDisplay=true
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/vnd.microsoft.portable-executable;application/x-msi;application/x-ms-ne-executable;application/x-dosexec;application/x-bat;

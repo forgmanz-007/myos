@@ -1,0 +1,11 @@
+#!/bin/bash
+# 32-bit support and Wine, so Windows programs (.exe) can run.
+# Proton (hook 0250) builds on the same 32-bit graphics libraries.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+dpkg --add-architecture i386
+apt-get update -q
+apt-get install -y -q \
+    wine wine64 wine32:i386 libwine libwine:i386 fonts-wine \
+    libgl1-mesa-dri:i386 libglx-mesa0:i386 mesa-vulkan-drivers:i386 libvulkan1:i386

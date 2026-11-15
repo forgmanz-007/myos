@@ -1,0 +1,71 @@
+#!/bin/bash
+# Keep the Start menu to the apps you chose: remove the extra KDE apps that
+# come in as recommendations and hide every other menu entry.
+set -euo pipefail
+. /etc/myos/build.conf
+export DEBIAN_FRONTEND=noninteractive
+
+REMOVE="konsole kate kwrite okular gwenview ark kcalc kde-spectacle plasma-discover
+        plasma-welcome khelpcenter kmenuedit kwalletmanager plasma-systemmonitor
+        ksystemlog kfind konqueror kdeconnect partitionmanager elisa juk dragonplayer
+        haruna xterm zutty firefox-esr kup-backup"
+KEEP=" $EXTRA_PACKAGES "
+[ "$FILE_MANAGER" = yes ] && KEEP="$KEEP dolphin "
+
+# Never let a removal take these with it (checked with a dry run first).
+PROTECTED='^(plasma-desktop|plasma-workspace|kwin-wayland|kwin-x11|sddm|systemsettings|firefox|calamares|calamares-settings-debian|dolphin|python3-pyqt6|clamav|wine|ollama)$'
+purge=""
+for p in $REMOVE; do
+    case "$KEEP" in *" $p "*) continue ;; esac
+    dpkg -s "$p" >/dev/null 2>&1 || continue
+    if apt-get -s purge "$p" 2>/dev/null | awk '/^(Purg|Remv) /{print $2}' | grep -qE "$PROTECTED"; then
+        echo "Keeping $p: removing it would also remove part of the desktop."
+        continue
+    fi
+    purge="$purge $p"
+done
+if [ -n "$purge" ]; then apt-get purge -y -q $purge; fi
+
+# Start menu entries that stay visible.
+ALLOW=" firefox.desktop deepseek-shell.desktop systemsettings.desktop myos-security.desktop myos-taskmanager.desktop calamares-install-debian.desktop "
+[ "$FILE_MANAGER" = yes ] && ALLOW="$ALLOW org.kde.dolphin.desktop "
+for p in $EXTRA_PACKAGES; do
+    for f in $(dpkg -L "$p" 2>/dev/null | grep -E '^/usr/share/applications/[^/]+\.desktop$' || true); do
+        ALLOW="$ALLOW $(basename "$f") "
+    done
+done
+
+# Hide everything else with an override in /usr/local/share/applications
+# (it wins over /usr/share and survives package updates).
+install -d /usr/local/share/applications
+for f in /usr/share/applications/*.desktop; do
+    name=$(basename "$f")
+    case "$ALLOW" in *" $name "*) continue ;; esac
+    grep -q '^Type=Application' "$f" || continue
+    grep -qiE '^(NoDisplay|Hidden)=true' "$f" && continue
+    sed -e '/^NoDisplay=/d' -e '/^\[Desktop Entry\]/a NoDisplay=true' "$f" > "/usr/local/share/applications/$name"
+    echo "Hidden from the Start menu: $name"
+done
+
+# Call the file manager "File Explorer", like Windows (Start menu, taskbar, search).
+# Only the app's own name changes; searching "dolphin" still finds it.
+DOLPHIN=/usr/share/applications/org.kde.dolphin.desktop
+if [ "$FILE_MANAGER" = yes ] && [ -f "$DOLPHIN" ]; then
+    # BEGIN explorer-rename (tests extract this awk program)
+    awk '
+        function generic_line() { if (main && !generic) { print "GenericName=File Manager (Dolphin)"; generic = 1 } }
+        /^\[/ { generic_line(); main = ($0 == "[Desktop Entry]") }
+        main && /^Name(\[[^]]*\])?=/ { if (!named) { print "Name=File Explorer"; named = 1 }; next }
+        main && /^GenericName(\[[^]]*\])?=/ { generic_line(); next }
+        { print }
+        END { generic_line() }
+    ' "$DOLPHIN" > /usr/local/share/applications/org.kde.dolphin.desktop
+    # END explorer-rename
+    echo "The file manager is shown as File Explorer."
+fi
+
+# Start menu favorites for new users: Firefox, File Explorer, DeepSeek Shell, ClamAV
+# Security, Settings (Plasma ignores favorites set by the desktop layout script).
+if ! /usr/libexec/myos/start-menu-defaults; then
+    echo "WARNING: new users will see KDE's default Start menu favorites instead." >&2
+fi

@@ -1,0 +1,3 @@
+# Start with a clean desktop after login (no restored windows), like Windows.
+[General]
+loginMode=emptySession

@@ -1,0 +1,87 @@
+#!/bin/sh
+# Makes memory go further, the way macOS does: memory that has not been used
+# for a while is compressed instead of being thrown out, so more apps fit into
+# the same RAM.
+#   - PC with swap space on its disk: memory is compressed inside RAM first
+#     (zswap). Only when RAM gets tight does the coldest compressed data move on
+#     to the disk, like the swap files of a Mac.
+#   - PC without swap space on its disk: a compressed swap that lives in RAM (zram).
+# Run once per start by myos-memory.service, after the disk's swap is active.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+SWAPS=${MYOS_MEMORY_SWAPS:-/proc/swaps}
+ZSWAP=${MYOS_MEMORY_ZSWAP:-/sys/module/zswap/parameters}
+MEMINFO=${MYOS_MEMORY_MEMINFO:-/proc/meminfo}
+LRU_GEN=${MYOS_MEMORY_LRU_GEN:-/sys/kernel/mm/lru_gen}
+STATE=${MYOS_MEMORY_STATE:-/run/myos-memory-mode}
+MAX_ZRAM_KB=8388608         # a compressed swap in RAM holds up to 8 GB of data
+
+on_disk() { awk 'NR > 1 && $1 !~ /zram/ { n++ } END { exit !n }' "$SWAPS" 2>/dev/null; }
+in_ram()  { awk 'NR > 1 && $1 ~ /zram/ { n++ } END { exit !n }' "$SWAPS" 2>/dev/null; }
+zswap_set() { [ -e "$ZSWAP/$1" ] && { echo "$2" > "$ZSWAP/$1"; } 2>/dev/null; }
+# A device that has only just appeared or changed is busy for a moment (the system is
+# still looking at it; seen on the test PC), so each step is tried for up to 5 seconds.
+patiently() {
+    for try in 1 2 3 4 5 6 7 8 9 10; do
+        if [ "$try" -lt 10 ]; then
+            "$@" 2>/dev/null && return 0
+            sleep "${MYOS_MEMORY_RETRY_WAIT:-0.5}"
+        else
+            "$@" && return 0            # the last try may say why it fails
+        fi
+    done
+    return 1
+}
+# shellcheck disable=SC2317   # the next two are called through "patiently"
+find_device() {
+    device=$(zramctl --find --algorithm zstd --size "${size_kb}KiB") \
+        || device=$(zramctl --find --size "${size_kb}KiB") || device=""
+    [ -n "$device" ]
+}
+# shellcheck disable=SC2317
+format() { mkswap "$1" >/dev/null; }
+release() { patiently zramctl --reset "$1"; }      # gives a swap in RAM back
+
+# Never push out what was used in the last second. If even that does not fit,
+# a program is closed instead of the whole PC grinding to a halt.
+if [ -e "$LRU_GEN/min_ttl_ms" ]; then { echo 1000 > "$LRU_GEN/min_ttl_ms"; } 2>/dev/null; fi
+
+if on_disk && [ -d "$ZSWAP" ]; then
+    for algorithm in zstd lz4 lzo; do
+        zswap_set compressor "$algorithm" && break
+    done
+    zswap_set zpool zsmalloc
+    zswap_set max_pool_percent 35       # compressed data may fill up to a third of the RAM
+    zswap_set shrinker_enabled Y        # cold compressed data moves to the disk by itself
+    if zswap_set enabled Y; then
+        # A compressed swap in RAM on top of this would compress everything twice.
+        awk 'NR > 1 && $1 ~ /zram/ { print $1 }' "$SWAPS" | while read -r device; do
+            swapoff "$device" 2>/dev/null && release "$device"
+        done
+        sysctl -q -w vm.swappiness=133
+        # Coming from the other mode without a restart: reading from a disk is done in groups again.
+        [ "$(cat "$STATE" 2>/dev/null)" = zram ] && sysctl -q -w vm.page-cluster=3
+        echo zswap > "$STATE"
+        echo "Compressed memory is on (zswap, $(cat "$ZSWAP/compressor" 2>/dev/null)); the coldest data moves to the swap space on disk."
+        exit 0
+    fi
+fi
+
+if ! in_ram; then
+    total_kb=$(awk '/^MemTotal:/ { print $2 }' "$MEMINFO" 2>/dev/null)
+    case "$total_kb" in ""|*[!0-9]*) echo "memory-setup: could not read the amount of RAM." >&2; exit 0 ;; esac
+    size_kb=$total_kb
+    [ "$size_kb" -gt "$MAX_ZRAM_KB" ] && size_kb=$MAX_ZRAM_KB
+    modprobe zram 2>/dev/null
+    device=""
+    if ! patiently find_device || ! patiently format "$device" || ! patiently swapon --priority 100 "$device"; then
+        [ -n "$device" ] && release "$device"
+        echo off > "$STATE"
+        echo "memory-setup: compressed memory could not be set up on this PC." >&2
+        exit 0
+    fi
+fi
+zswap_set enabled N         # a swap in RAM is compressed already; twice would only cost time
+sysctl -q -w vm.swappiness=150 vm.page-cluster=0
+echo zram > "$STATE"
+echo "Compressed memory is on (zram): this PC has no swap space on its disk."
+exit 0

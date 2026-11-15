@@ -1,0 +1,14 @@
+[Unit]
+Description=First boot setup (system snapshots, installer cleanup)
+ConditionPathExists=!/var/lib/myos/firstboot-done
+ConditionKernelCommandLine=!boot=live
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/myos/firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

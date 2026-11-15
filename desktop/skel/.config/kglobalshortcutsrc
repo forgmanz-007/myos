@@ -1,0 +1,34 @@
+# Windows 10 keyboard shortcuts. Format: Action=Current,Default,Description
+# (several keys are separated by \t).
+
+[kwin]
+Overview=Meta+Tab\tMeta+W,Meta+W,Toggle Overview
+Window Maximize=Meta+Up\tMeta+PgUp,Meta+PgUp,Maximize Window
+Window Minimize=Meta+Down\tMeta+PgDown,Meta+PgDown,Minimize Window
+Window Quick Tile Top=none,Meta+Up,Quick Tile Window to the Top
+Window Quick Tile Bottom=none,Meta+Down,Quick Tile Window to the Bottom
+MinimizeAll=Meta+M,Meta+Shift+D,Minimize All Windows
+
+# Free Win+Q and Win+S for search (Plasma uses them for activities by default).
+# Win+S opens the search box on the taskbar, Win+Q and Win+R open KRunner.
+[plasmashell]
+manage activities=none,Meta+Q,Show Activity Switcher
+stop current activity=none,Meta+S,Stop Current Activity
+
+[KDE Keyboard Layout Switcher]
+Switch to Next Keyboard Layout=Meta+Space\tMeta+Alt+K,Meta+Alt+K,Switch to Next Keyboard Layout
+
+[services][org.kde.krunner.desktop]
+_launch=Alt+Space\tAlt+F2\tSearch\tMeta+R\tMeta+Q
+
+[services][systemsettings.desktop]
+_launch=Meta+I
+
+[services][deepseek-shell.desktop]
+_launch=Meta+C
+
+[services][org.kde.dolphin.desktop]
+_launch=Meta+E
+
+[services][myos-taskmanager.desktop]
+_launch=Ctrl+Shift+Esc

@@ -1,0 +1,4 @@
+// MyOS: File Explorer's title bar shows just the folder, like Windows 10. Keeps MyOS's copy of
+// KWin's title bar files in step with KWin after every package change.
+// See /usr/libexec/myos/title-bars.
+DPkg::Post-Invoke { "if [ -x /usr/libexec/myos/title-bars ]; then /usr/libexec/myos/title-bars || true; fi"; };

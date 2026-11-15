@@ -1,0 +1,20 @@
+#!/bin/bash
+# ClamAV: start the scanner only when something scans (saves ~1 GB of RAM
+# until it is needed) and bundle current virus signatures.
+set -euo pipefail
+. /etc/myos/build.conf
+
+if [ -f /usr/lib/systemd/system/clamav-daemon.socket ] || [ -f /lib/systemd/system/clamav-daemon.socket ]; then
+    systemctl disable clamav-daemon.service >/dev/null 2>&1 || true
+    systemctl enable clamav-daemon.socket
+fi
+systemctl enable clamav-freshclam.service
+
+if [ "$CLAMAV_SIGNATURES" = yes ]; then
+    if freshclam --stdout; then
+        echo "ClamAV signatures bundled."
+    else
+        echo "WARNING: could not download ClamAV signatures now. They download automatically after the first boot."
+    fi
+    chown -R clamav:clamav /var/lib/clamav || true
+fi

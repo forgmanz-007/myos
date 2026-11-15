@@ -1,0 +1,54 @@
+#!/bin/bash
+# Proton for Windows programs:
+#  * umu-launcher runs any .exe with Proton, without Steam.
+#  * GE-Proton is installed system-wide in /usr/share/steam/compatibilitytools.d,
+#    where Steam also finds it if you install Steam later.
+set -euo pipefail
+. /etc/myos/build.conf
+export DEBIAN_FRONTEND=noninteractive
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+release_json() {  # <owner/repo> <latest | tags/NAME>
+    curl -fsSL --retry 5 --retry-delay 10 -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$1/releases/$2"
+}
+asset_urls() {    # <json> <regex for the file name>
+    printf '%s' "$1" | grep -oE '"browser_download_url": *"[^"]+"' \
+        | sed -E 's/.*"(https[^"]+)"$/\1/' | grep -E "$2" || true
+}
+
+# umu-launcher: .deb packages built for Debian 13
+umu=$(release_json Open-Wine-Components/umu-launcher latest)
+urls=$(asset_urls "$umu" '_(amd64|all)_debian-13\.deb$')
+if [ -z "$urls" ]; then
+    echo "Could not find umu-launcher packages for Debian 13 on GitHub." >&2
+    exit 1
+fi
+for u in $urls; do curl -fSL --retry 3 -o "$TMP/$(basename "$u")" "$u"; done
+apt-get install -y -q "$TMP"/*.deb
+
+# GE-Proton, built in
+if [ "$BUNDLE_PROTON" = yes ]; then
+    if [ -n "$PROTON_VERSION" ]; then
+        ge=$(release_json GloriousEggroll/proton-ge-custom "tags/$PROTON_VERSION")
+    else
+        ge=$(release_json GloriousEggroll/proton-ge-custom latest)
+    fi
+    tar_url=$(asset_urls "$ge" '\.tar\.gz$' | head -n1)
+    sum_url=$(asset_urls "$ge" '\.sha512sum$' | head -n1)
+    [ -n "$tar_url" ] || { echo "No GE-Proton download found." >&2; exit 1; }
+    name=$(basename "$tar_url" .tar.gz)
+    echo "Downloading $name"
+    curl -fSL --retry 3 -o "$TMP/proton.tar.gz" "$tar_url"
+    if [ -n "$sum_url" ]; then
+        want=$(curl -fsSL --retry 3 "$sum_url" | awk '{print $1}')
+        have=$(sha512sum "$TMP/proton.tar.gz" | awk '{print $1}')
+        if [ "$want" != "$have" ]; then echo "GE-Proton checksum mismatch." >&2; exit 1; fi
+    fi
+    install -d /usr/share/steam/compatibilitytools.d
+    tar -xzf "$TMP/proton.tar.gz" -C /usr/share/steam/compatibilitytools.d
+    test -x "/usr/share/steam/compatibilitytools.d/$name/proton"
+    echo "$name" > /usr/share/steam/compatibilitytools.d/.builtin
+fi

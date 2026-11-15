@@ -1,0 +1,6 @@
+#!/bin/sh
+PREFIX="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export PYTHONPATH="$PREFIX/lib/myos-taskmanager${PYTHONPATH:+:$PYTHONPATH}"
+: "${MYOS_TASKMANAGER_HELPER:=$PREFIX/libexec/myos-taskmanager/end-process}"
+export MYOS_TASKMANAGER_HELPER
+exec python3 -P -m myos_taskmanager "$@"

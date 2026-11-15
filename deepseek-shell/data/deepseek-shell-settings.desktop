@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AI Assistant
+Comment=DeepSeek Shell: AI model, safety, and the tools your AI can use
+Exec=deepseek-shell --settings
+Icon=deepseek-shell
+Terminal=false
+X-KDE-System-Settings-Parent-Category=system-administration
+X-KDE-System-Settings-Category=system-administration
+X-KDE-Weight=90
+X-KDE-Keywords=ai,assistant,deepseek,tools,model,ollama

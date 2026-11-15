@@ -1,0 +1,44 @@
+#!/bin/sh
+# Runs once, on the first boot of the installed system.
+log() { echo "myos-firstboot: $*"; }
+
+# 1. Snapshots on Btrfs, so system changes can be undone
+#    (DeepSeek Shell takes one before every admin change).
+if [ "$(findmnt -n -o FSTYPE /)" = btrfs ] && command -v snapper >/dev/null 2>&1; then
+    if ! snapper -c root get-config >/dev/null 2>&1; then
+        if snapper -c root create-config /; then
+            snapper -c root set-config NUMBER_LIMIT=20 NUMBER_LIMIT_IMPORTANT=10 TIMELINE_CREATE=no
+            snapper -c root create --description "Fresh install" --cleanup-algorithm number --userdata important=yes
+            log "system snapshots enabled"
+        fi
+    fi
+    systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
+else
+    log "root filesystem is not Btrfs, snapshots stay off"
+fi
+
+# 2. Debian's installer switches on only the "main" and "non-free-firmware" parts
+#    of the Debian archive. Drivers (NVIDIA) and tools such as Steam and winetricks
+#    are in "contrib" and "non-free", so switch those on too.
+add_components() {
+    awk '
+        /^[[:space:]]*deb(-src)?[[:space:]]/ && /(deb|security)\.debian\.org/ {
+            n = split("contrib non-free non-free-firmware", parts, " ")
+            for (i = 1; i <= n; i++)
+                if (index($0 " ", " " parts[i] " ") == 0) $0 = $0 " " parts[i]
+        }
+        { print }' "$1" > "$1.myos-new" && cat "$1.myos-new" > "$1"
+    rm -f "$1.myos-new"
+}
+for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+    [ -f "$f" ] && add_components "$f"
+done
+log "contrib and non-free package sections enabled"
+
+# 3. The installer is no longer needed.
+if dpkg -s calamares >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y -q calamares calamares-settings-debian || true
+fi
+
+mkdir -p /var/lib/myos
+touch /var/lib/myos/firstboot-done

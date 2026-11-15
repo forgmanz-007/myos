@@ -1,0 +1,5 @@
+# File indexing stays off: it keeps the disk and the processor busy in the
+# background. Switch it on in Settings > Search > File Search if you want the
+# Start menu to find your files by name.
+[Basic Settings]
+Indexing-Enabled=false

@@ -1,0 +1,52 @@
+#!/bin/sh
+# Stops the ClamAV virus scanner when the PC is short of memory and nothing has
+# used the scanner since the last look. Loaded, it holds about 1 GB; its socket
+# stays open, so the next scan starts it again by itself (that scan then waits
+# for the signatures to load, which is why the scanner is left alone while
+# there is memory to spare). Run every 5 minutes by myos-clamd-idle.timer.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+SERVICE=clamav-daemon.service
+SOCKET=clamav-daemon.socket
+STATE=${MYOS_CLAMD_IDLE_STATE:-/run/myos-clamd-idle}
+CHECKS=${MYOS_CLAMD_IDLE_CHECKS:-1}     # idle looks in a row before it may be stopped
+LOW=${MYOS_CLAMD_IDLE_LOW_MEMORY:-25}   # "short of memory": less than this percent is available
+PROC=${MYOS_CLAMD_IDLE_PROC:-/proc}
+
+if ! systemctl is-active --quiet "$SERVICE"; then
+    rm -f "$STATE"
+    exit 0
+fi
+# Without the socket nothing would start the scanner again: leave it running.
+systemctl is-active --quiet "$SOCKET" || exit 0
+
+pid=$(systemctl show -p MainPID --value "$SERVICE")
+case "$pid" in ""|0|*[!0-9]*) exit 0 ;; esac
+# Processor time the scanner has used so far (clock ticks, user + system).
+used=$(sed 's/^.*) //' "$PROC/$pid/stat" 2>/dev/null | awk '{ print $12 + $13 }')
+case "$used" in ""|*[!0-9]*) exit 0 ;; esac
+
+last_pid=""; last_used=0; idle=0
+if [ -r "$STATE" ]; then read -r last_pid last_used idle < "$STATE"; fi
+case "$last_used" in ""|*[!0-9]*) last_used=0 ;; esac
+case "$idle" in ""|*[!0-9]*) idle=0 ;; esac
+
+# Idle = the same scanner process used (almost) no processor time since the
+# last look and no scan is running right now.
+if [ "$pid" = "$last_pid" ] && [ $((used - last_used)) -lt 20 ] && ! pgrep -x clamdscan >/dev/null 2>&1; then
+    idle=$((idle + 1))
+else
+    idle=0
+fi
+echo "$pid $used $idle" > "$STATE"
+
+[ "$idle" -ge "$CHECKS" ] || exit 0
+available=$(awk '/^MemTotal:/ { t = $2 } /^MemAvailable:/ { a = $2 }
+                 END { if (t > 0) printf "%d", a * 100 / t; else print 100 }' "$PROC/meminfo" 2>/dev/null)
+case "$available" in ""|*[!0-9]*) exit 0 ;; esac
+if [ "$available" -lt "$LOW" ]; then
+    if systemctl stop "$SERVICE"; then
+        rm -f "$STATE"
+        echo "Memory is short ($available% available) and the virus scanner was idle: stopped it. The next scan starts it again."
+    fi
+fi
+exit 0

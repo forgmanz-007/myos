@@ -1,0 +1,30 @@
+#!/bin/sh
+# live-build configuration. Values come from build.conf, which
+# scripts/container-build.sh writes from config.env.
+set -e
+. ./build.conf
+
+lb config noauto \
+    --mode debian \
+    --distribution "$DEBIAN_RELEASE" \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --updates true \
+    --security true \
+    --backports "$BACKPORTS" \
+    -b iso-hybrid \
+    --bootloaders "syslinux grub-efi" \
+    --uefi-secure-boot auto \
+    --debian-installer none \
+    --firmware-binary true \
+    --firmware-chroot true \
+    --linux-packages "linux-image linux-headers" \
+    --apt-recommends true \
+    --bootappend-live "boot=live components quiet splash locales=$LIVE_LOCALE keyboard-layouts=$LIVE_KEYBOARD" \
+    --iso-application "$OS_NAME" \
+    --iso-publisher "$OS_NAME" \
+    --iso-volume "$OS_NAME" \
+    --image-name "$OS_ID" \
+    --chroot-squashfs-compression-type zstd \
+    --memtest none \
+    --cache true \
+    "$@"

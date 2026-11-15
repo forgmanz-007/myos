@@ -1,0 +1,10 @@
+{
+  "name": "disk_space",
+  "description": "Show how full each drive is (size, used, free).",
+  "command": "df -h -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs",
+  "parameters": [],
+  "ask_before_running": false,
+  "run_as_admin": false,
+  "timeout": 30,
+  "enabled": true
+}

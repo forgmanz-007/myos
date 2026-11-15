@@ -1,0 +1,63 @@
+#!/bin/sh
+# Ends system processes for Task Manager. Runs as root through pkexec.
+#   end-process PID:START [PID:START ...]
+# START is the process's start time from /proc/PID/stat; it makes sure the PID
+# still belongs to the process the user picked. Each process is asked to quit
+# (TERM) and stopped by force (KILL) if it is still there 3 seconds later.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+PROC=${MYOS_TASKMANAGER_PROC:-/proc}
+
+# Looks at a process: sets p_start (start time), p_flags and p_state; fails if it is gone.
+look() {
+    p_start=""; p_flags=""; p_state=""
+    [ -r "$PROC/$1/stat" ] || return 1
+    read -r p_start p_flags p_state <<STAT
+$(sed 's/^.*) //' "$PROC/$1/stat" 2>/dev/null | awk '{ print $20, $7, $1 }')
+STAT
+    [ -n "$p_start" ]
+}
+same() {    # is PID $1 still the process that started at $2?
+    look "$1" && [ "$p_start" = "$2" ] && [ "$p_state" != Z ]
+}
+
+[ $# -gt 0 ] || { echo "usage: end-process PID:START..." >&2; exit 2; }
+targets=""
+for arg in "$@"; do
+    case "$arg" in
+        *[!0-9:]*|*:*:*|:*|*:|"") echo "end-process: bad argument: $arg" >&2; exit 2 ;;
+        *:*) ;;
+        *) echo "end-process: bad argument: $arg" >&2; exit 2 ;;
+    esac
+    pid=${arg%%:*}
+    start=${arg##*:}
+    if [ "$pid" -le 2 ]; then
+        echo "end-process: process $pid is needed by the system and can't be ended." >&2
+        exit 3
+    fi
+    look "$pid" && [ "$p_start" = "$start" ] || continue    # already gone
+    if [ $(( ${p_flags:-0} / 2097152 % 2 )) -eq 1 ]; then    # PF_KTHREAD: part of the Linux kernel
+        echo "end-process: process $pid is part of the Linux kernel and can't be ended." >&2
+        exit 3
+    fi
+    targets="$targets $pid:$start"
+done
+
+for t in $targets; do
+    kill -TERM "${t%%:*}" 2>/dev/null
+done
+i=0
+while [ $i -lt 30 ]; do
+    left=""
+    for t in $targets; do
+        if same "${t%%:*}" "${t##*:}"; then left="$left $t"; fi
+    done
+    targets=$left
+    [ -n "$targets" ] || exit 0
+    sleep 0.1
+    i=$((i + 1))
+done
+code=0
+for t in $targets; do
+    kill -KILL "${t%%:*}" 2>/dev/null || { echo "end-process: process ${t%%:*} could not be ended." >&2; code=1; }
+done
+exit $code

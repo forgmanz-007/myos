@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Shell
+GenericName=AI Assistant
+Comment=Your local AI: ask questions, fix problems, get things done
+Exec=deepseek-shell
+Icon=deepseek-shell
+Terminal=false
+Categories=System;Utility;
+Keywords=ai;assistant;help;fix;chat;deepseek;terminal;shell;cortana;copilot;
+StartupNotify=true
+StartupWMClass=deepseek-shell
+X-KDE-Shortcuts=Meta+C
+Actions=Diagnose;Settings;
+
+[Desktop Action Diagnose]
+Name=Check my PC for problems
+Exec=deepseek-shell --diagnose
+
+[Desktop Action Settings]
+Name=Tools and settings
+Exec=deepseek-shell --settings

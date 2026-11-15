@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=MyOS 10
+Comment=White title bars with wide minimize, maximize and close buttons, like Windows 10
+X-KDE-PluginInfo-Author=MyOS
+X-KDE-PluginInfo-Name=MyOS10
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-License=GPL-2.0+
+X-KDE-PluginInfo-EnabledByDefault=true

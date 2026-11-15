@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Visual effects check
+Comment=Switches costly desktop effects off when there is no graphics acceleration, and on again when there is
+Exec=myos-performance auto --login
+Icon=preferences-desktop-effects
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

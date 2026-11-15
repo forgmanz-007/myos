@@ -1,0 +1,9 @@
+# File Explorer feel: open in "This PC"-like Home, no remembered tabs.
+[General]
+RememberOpenedTabs=false
+ShowFullPath=false
+# Keep the menu bar (File, Home, View: see /usr/local/share/kxmlgui5/dolphin/dolphinui.rc) on
+# the first start too. Dolphin hides its menu bar and side panels when this number is below
+# 200 (its "first start"); the panels stay closed through the window state that new users get
+# in /etc/skel/.local/state/dolphinstaterc. (Dolphin 25.04 writes 202 itself after a start.)
+Version=202

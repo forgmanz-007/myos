@@ -1,0 +1,33 @@
+# Build the ISO on GitHub's servers: Actions tab > "Build ISO" > Run workflow.
+# The ISO appears as a downloadable artifact of the run (kept 7 days).
+name: Build ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space (the build needs about 25 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Build the ISO
+        run: ./build.sh
+
+      - name: Upload the ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso
+          path: |
+            out/*.iso
+            out/*.sha256
+            out/build.log
+          compression-level: 0
+          retention-days: 7

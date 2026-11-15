@@ -1,0 +1,32 @@
+#!/bin/sh
+# Says once that an app was closed because memory ran out, with the app's own name.
+# systemd starts this only when an app fails (OnFailure= of every app unit, see
+# app-closed.conf) and passes MONITOR_UNIT and MONITOR_SERVICE_RESULT; nothing of it
+# stays in memory. It replaces Plasma's own notice, which came two or three times
+# for one closed app (seen on the test PC).
+[ "${MONITOR_SERVICE_RESULT:-}" = oom-kill ] || exit 0
+unit=${MONITOR_UNIT:-}
+[ -n "$unit" ] || exit 0
+
+# app-<menu entry>@<random>.service (how Plasma starts apps), app-<launcher>-<entry>-<number>.scope
+id=$(printf '%s\n' "$unit" | sed -e 's/^app-//' -e 's/[.]service$//' -e 's/[.]scope$//' -e 's/@.*//' -e 's/\\x2d/-/g')
+case "$unit" in
+    *.scope) id=$(printf '%s\n' "$id" | sed -e 's/^flatpak-//' -e 's/^gnome-//' -e 's/^kde-//' -e 's/^snap-//' -e 's/-[0-9]*$//') ;;
+esac
+
+name="" icon=dialog-warning
+for dir in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" \
+           "$HOME/.local/share/flatpak/exports/share/applications" \
+           /var/lib/flatpak/exports/share/applications /usr/local/share/applications /usr/share/applications; do
+    entry="$dir/$id.desktop"
+    if [ -f "$entry" ]; then
+        name=$(sed -n 's/^Name=//p' "$entry" | head -n 1)
+        found=$(sed -n 's/^Icon=//p' "$entry" | head -n 1)
+        [ -n "$found" ] && icon=$found
+        break
+    fi
+done
+[ -n "$name" ] || name=$id
+
+exec notify-send -a "Memory" -i "$icon" "$name was closed" \
+    "Memory ran out, so the system closed $name to keep the PC working."

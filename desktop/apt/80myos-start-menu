@@ -1,0 +1,4 @@
+// MyOS: keep the Start menu favorites (Firefox, File Explorer, DeepSeek Shell,
+// ClamAV Security, Settings) for new users after Plasma updates.
+// See /usr/libexec/myos/start-menu-defaults.
+DPkg::Post-Invoke { "if [ -x /usr/libexec/myos/start-menu-defaults ]; then /usr/libexec/myos/start-menu-defaults || true; fi"; };

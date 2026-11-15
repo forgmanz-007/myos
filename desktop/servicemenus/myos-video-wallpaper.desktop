@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Service
+MimeType=video/*;image/gif;
+Actions=setWallpaper;setWallpaperSound;
+X-KDE-Submenu=Set as Wallpaper
+X-KDE-Priority=TopLevel
+Icon=preferences-desktop-wallpaper
+
+[Desktop Action setWallpaper]
+Name=Video wallpaper (muted)
+Icon=preferences-desktop-wallpaper
+Exec=myos-set-wallpaper --notify %f
+
+[Desktop Action setWallpaperSound]
+Name=Video wallpaper with sound
+Icon=audio-volume-high
+Exec=myos-set-wallpaper --notify --sound %f

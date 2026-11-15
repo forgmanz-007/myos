@@ -1,0 +1,6 @@
+# Window titles aligned left, like Windows.
+[Common]
+OutlineCloseButton=false
+
+[Windeco]
+TitleAlignment=AlignLeft

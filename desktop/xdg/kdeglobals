@@ -1,0 +1,21 @@
+# Windows 10 look for every user: white windows with blue selection (the colours are
+# added below this file by install.sh, from colors/MyOS10.colors), Windows-style icons,
+# and Selawik, a free font with the letter widths of Windows' Segoe UI.
+[General]
+BrowserApplication=firefox.desktop
+ColorScheme=MyOS10
+font=Selawik,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Selawik,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Selawik,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Selawik,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Icons]
+Theme=We10X
+
+[KDE]
+LookAndFeelPackage=org.myos.desktop
+SingleClick=false
+widgetStyle=Breeze
+
+[WM]
+activeFont=Selawik,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1

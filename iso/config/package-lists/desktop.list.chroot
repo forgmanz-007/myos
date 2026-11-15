@@ -1,0 +1,38 @@
+# KDE Plasma 6 — only the pieces that make the Windows 10-style desktop work.
+# Apps are NOT listed here on purpose (you asked for exactly 3 apps).
+plasma-desktop
+plasma-workspace
+kwin-wayland
+kwin-x11
+xwayland
+xserver-xorg
+sddm
+sddm-theme-breeze
+kde-config-sddm
+systemsettings
+kinfocenter
+kscreen
+plasma-nm
+plasma-pa
+bluedevil
+powerdevil
+power-profiles-daemon
+kde-config-gtk-style
+kde-cli-tools
+breeze
+breeze-gtk-theme
+xdg-desktop-portal-kde
+polkit-kde-agent-1
+libpam-kwallet5
+pipewire-audio
+fonts-noto-core
+fonts-noto-color-emoji
+xdg-user-dirs
+xdg-utils
+plymouth
+plymouth-themes
+# Video playback for video wallpapers (Qt Multimedia with its FFmpeg backend)
+# and hardware video decoding for AMD/Intel graphics (also used by Firefox).
+libqt6multimedia6
+qml6-module-qtmultimedia
+va-driver-all

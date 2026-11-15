@@ -1,0 +1,16 @@
+#!/bin/bash
+# Boot splash, first-boot setup and other system defaults.
+set -euo pipefail
+
+# Boot splash showing the PC maker's logo with a spinner, like Windows.
+plymouth-set-default-theme bgrt 2>/dev/null || echo "bgrt boot theme not available, keeping default"
+install -d /etc/default/grub.d
+cat > /etc/default/grub.d/10-myos.cfg <<'CFG'
+# Show the boot splash on the installed system.
+GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} splash"
+# Start after 2 seconds instead of 5. Press any key while the menu shows to
+# stop the countdown (for example to pick Windows on a dual-boot PC).
+GRUB_TIMEOUT=2
+CFG
+
+systemctl enable myos-firstboot.service

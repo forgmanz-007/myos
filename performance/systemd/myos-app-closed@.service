@@ -1,0 +1,8 @@
+[Unit]
+Description=Say once that an app was closed because memory ran out
+ConditionPathExists=/usr/libexec/myos/app-closed
+CollectMode=inactive-or-failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/myos/app-closed

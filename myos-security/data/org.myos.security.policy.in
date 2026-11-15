@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>ClamAV Security</vendor>
+  <action id="org.myos.security.update-signatures">
+    <description>Update the virus signatures</description>
+    <message>ClamAV Security wants to download the newest virus signatures.</message>
+    <icon_name>myos-security</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@LIBEXECDIR@/update-signatures</annotate>
+  </action>
+  <action id="org.myos.security.disk-usage">
+    <description>Measure how much disk space a compressed program takes</description>
+    <message>ClamAV Security wants to measure the disk space of one of your folders.</message>
+    <icon_name>myos-security</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@LIBEXECDIR@/disk-usage</annotate>
+  </action>
+</policyconfig>

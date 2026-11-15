@@ -1,0 +1,7 @@
+# GRUB for PCs that start in legacy BIOS mode (see bootloader-efi.list.binary).
+grub-pc
+grub-pc-bin
+os-prober
+cryptsetup
+cryptsetup-initramfs
+keyutils

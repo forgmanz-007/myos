@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- one window in front, the edges of two more beside it -->
+  <rect x="6.5" y="5.5" width="11" height="13" fill="none" stroke="#000" stroke-width="1"/>
+  <path d="M3.5 7.5V16.5M20.5 7.5V16.5" fill="none" stroke="#000" stroke-width="1"/>
+</svg>

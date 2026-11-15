@@ -1,0 +1,6 @@
+#!/bin/sh
+# Start DeepSeek Shell. Options: --settings  --diagnose  --cli  --ask "question"
+PREFIX="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export DEEPSEEK_SHELL_PREFIX="$PREFIX"
+export PYTHONPATH="$PREFIX/lib/deepseek-shell${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -P -m deepseek_shell "$@"

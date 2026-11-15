@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+apt-get clean
+rm -rf /root/.gnupg /tmp/* /var/tmp/* 2>/dev/null || true

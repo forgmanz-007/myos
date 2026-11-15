@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Service
+MimeType=inode/directory;
+Actions=compress;
+
+[Desktop Action compress]
+Name=Compress to save disk space…
+Icon=archive-insert
+Exec=myos-compress %f

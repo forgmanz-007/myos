@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ClamAV Security
+GenericName=Virus Protection
+Comment=Virus scans, protection for Windows programs, quarantine
+Exec=myos-security
+Icon=myos-security
+Terminal=false
+Categories=System;Security;
+Keywords=antivirus;virus;malware;clamav;scan;security;defender;protection;virustotal;anyrun;
+StartupWMClass=myos-security

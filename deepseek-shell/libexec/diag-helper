@@ -1,0 +1,15 @@
+#!/bin/bash
+# Read-only system logs for DeepSeek Shell. Allowed without a password for the
+# person at the computer (see the polkit policy), because it can only read.
+export LC_ALL=C.UTF-8 SYSTEMD_PAGER='' PATH=/usr/sbin:/usr/bin:/sbin:/bin
+case "${1:-}" in
+    kernel)  exec journalctl -k -b --no-pager -o short-monotonic -n 400 ;;
+    errors)  exec journalctl -b -p err --no-pager -n 200 ;;
+    previous-boot-errors) exec journalctl -b -1 -p err --no-pager -n 150 ;;
+    unit)
+        if [[ ! "${2:-}" =~ ^[A-Za-z0-9@._:-]+$ ]]; then echo "invalid unit name" >&2; exit 2; fi
+        exec journalctl -b -u "$2" --no-pager -n 200 ;;
+    *)
+        echo "usage: diag-helper kernel|errors|previous-boot-errors|unit NAME" >&2
+        exit 2 ;;
+esac

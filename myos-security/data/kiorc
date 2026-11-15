@@ -1,0 +1,5 @@
+# Double-clicking a program runs it without asking "Execute or Cancel?" first, like on
+# Windows. Windows programs (.exe, .msi, .bat) go to myos-run-exe, which checks them for
+# viruses the first time they start. KDE's default is to ask every time.
+[Executable scripts]
+behaviourOnLaunch=execute

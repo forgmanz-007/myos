@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MyOS desktop icons
+Comment=Puts the Recycle Bin on the desktop (once) and the chosen icons in title bars
+Exec=/usr/libexec/myos/desktop-icons
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

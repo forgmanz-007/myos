@@ -1,0 +1,16 @@
+#!/bin/bash
+# Show your OS name in "About this System" and in the installer.
+# The system stays Debian underneath (ID=debian), so drivers and tools work.
+set -euo pipefail
+. /etc/myos/build.conf
+
+sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"$OS_NAME (based on Debian)\"/" /usr/lib/os-release
+
+B=/etc/calamares/branding/debian/branding.desc
+if [ -f "$B" ]; then
+    sed -i -E "s/^( *(productName|shortProductName|versionedName|shortVersionedName|bootloaderEntryName)):.*/\1: \"$OS_NAME\"/" "$B"
+fi
+D=/usr/share/applications/calamares-install-debian.desktop
+if [ -f "$D" ]; then
+    sed -i -E "s/^Name(\[[^]]*\])?=.*/Name\1=Install $OS_NAME/" "$D"
+fi

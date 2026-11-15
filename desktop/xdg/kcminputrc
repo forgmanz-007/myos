@@ -1,0 +1,7 @@
+# Num Lock on at login.
+[Keyboard]
+NumLock=0
+
+# White mouse pointer, like Windows.
+[Mouse]
+cursorTheme=Breeze_Light

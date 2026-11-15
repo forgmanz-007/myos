@@ -1,0 +1,40 @@
+#!/bin/sh
+# Title bars like Windows 10's File Explorer: "Downloads", not "Downloads — Dolphin".
+#
+# Qt adds a program's own name after its window titles, and KDE's file manager is called
+# Dolphin. KWin draws title bars with the QML files in /usr/share/kwin/aurorae; this puts a
+# copy of them, with that name taken off, in /usr/local/share/kwin/aurorae, which KWin finds
+# first. The copy is made from the installed KWin, again after every package change (APT hook
+# /etc/apt/apt.conf.d/80myos-title-bars), so it always matches KWin. If KWin's file is not as
+# expected, the copy is removed and KWin's own files are used (titles keep " — Dolphin").
+# KWin reads the files when it starts, so a change shows after the next login.
+SRC=${MYOS_KWIN_AURORAE:-/usr/share/kwin/aurorae}
+DEST=${MYOS_TITLE_BARS_DEST:-/usr/local/share/kwin/aurorae}
+OLD='text: decoration.client.caption'
+NEW='text: decoration.client.caption.replace(/ — Dolphin$/, "")'
+
+if [ ! -f "$SRC/aurorae.qml" ]; then
+    rm -rf "$DEST"
+    exit 0
+fi
+if [ "$(grep -c -F "$OLD" "$SRC/aurorae.qml")" != 1 ]; then
+    echo "myos-title-bars: KWin's title bar file is not as expected; using it unchanged." >&2
+    rm -rf "$DEST"
+    exit 0
+fi
+
+mkdir -p "${DEST%/*}" || exit 1
+TMP=$(mktemp -d "${DEST%/*}/.aurorae.XXXXXX") || exit 1
+if cp "$SRC"/*.qml "$TMP"/ &&
+   OLD=$OLD NEW=$NEW awk '{ i = index($0, ENVIRON["OLD"])
+                            if (i) $0 = substr($0, 1, i - 1) ENVIRON["NEW"] substr($0, i + length(ENVIRON["OLD"]))
+                            print }' "$SRC/aurorae.qml" > "$TMP/aurorae.qml" &&
+   grep -q -F "$NEW" "$TMP/aurorae.qml"; then
+    chmod 755 "$TMP" && chmod 644 "$TMP"/*.qml
+    rm -rf "$DEST"
+    mv "$TMP" "$DEST"
+else
+    rm -rf "$TMP"
+    echo "myos-title-bars: could not make the title bar files." >&2
+    exit 1
+fi

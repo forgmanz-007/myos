@@ -1,0 +1,34 @@
+#!/bin/bash
+# Firefox from Mozilla's official APT repository (always the current version,
+# instead of Debian's Firefox ESR).
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+KEY=/etc/apt/keyrings/packages.mozilla.org.asc
+FPR=35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3
+install -d -m 0755 /etc/apt/keyrings
+curl -fsSL --retry 3 https://packages.mozilla.org/apt/repo-signing-key.gpg -o "$KEY"
+got=$(gpg --show-keys --with-colons "$KEY" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')
+if [ "$got" != "$FPR" ]; then
+    echo "Mozilla signing key has an unexpected fingerprint ($got). Stopping." >&2
+    exit 1
+fi
+
+cat > /etc/apt/sources.list.d/mozilla.sources <<'SRC'
+Types: deb
+URIs: https://packages.mozilla.org/apt
+Suites: mozilla
+Components: main
+Signed-By: /etc/apt/keyrings/packages.mozilla.org.asc
+SRC
+cat > /etc/apt/preferences.d/mozilla <<'PIN'
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000
+PIN
+
+apt-get update -q
+apt-get install -y -q firefox
+if dpkg -s firefox-esr >/dev/null 2>&1; then
+    apt-get purge -y -q firefox-esr
+fi

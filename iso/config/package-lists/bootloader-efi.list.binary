@@ -1,0 +1,16 @@
+# Bootloader packages for the installer, stored in a small package repository
+# on the USB stick (dists/ and pool/). Debian's installer helpers point the new
+# system at that repository and install GRUB from it, so this also works
+# without internet. Includes the Secure Boot-signed GRUB and shim, so the
+# installed system starts with Secure Boot switched on.
+# (BIOS GRUB is in its own list because grub-pc and grub-efi-amd64 conflict.)
+grub-efi
+grub-efi-amd64
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+os-prober
+cryptsetup
+cryptsetup-initramfs
+keyutils

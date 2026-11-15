@@ -1,0 +1,19 @@
+# No "hot corner": Windows 10 has none.
+[Effect-overview]
+BorderActivate=9
+
+# Win+M minimizes all windows.
+[Plugins]
+minimizeallEnabled=true
+
+# Alt+Tab shows window thumbnails in a grid.
+[TabBox]
+LayoutName=thumbnail_grid
+
+# Windows 10 title bars (the MyOS10 theme in /usr/share/aurorae/themes): white, title on
+# the left after the app icon, wide minimize / maximize / close buttons, red close button.
+[org.kde.kdecoration2]
+ButtonsOnLeft=M
+ButtonsOnRight=IAX
+library=org.kde.kwin.aurorae
+theme=__aurorae__svg__MyOS10

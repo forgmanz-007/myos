@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=Task Manager
+GenericName=Apps, processes and performance
+Comment=See and end running apps, watch CPU and memory, choose what starts with the PC
+Exec=myos-taskmanager
+Icon=myos-taskmanager
+Terminal=false
+Categories=System;Monitor;
+Keywords=task manager;taskmgr;process;processes;end task;kill;frozen;not responding;cpu;memory;ram;disk;network;gpu;performance;slow;startup;autostart;services;system monitor;
+StartupNotify=true
+StartupWMClass=myos-taskmanager
+X-KDE-Shortcuts=Ctrl+Shift+Esc
+Actions=Performance;Startup;
+
+[Desktop Action Performance]
+Name=Performance
+Exec=myos-taskmanager --tab performance
+
+[Desktop Action Startup]
+Name=Startup apps
+Exec=myos-taskmanager --tab startup

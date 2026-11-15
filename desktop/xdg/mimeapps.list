@@ -1,0 +1,25 @@
+# Firefox opens web pages, PDFs and images (there is no separate viewer app).
+# .exe files go through the virus check and then run with Wine or Proton.
+[Default Applications]
+x-scheme-handler/http=firefox.desktop
+x-scheme-handler/https=firefox.desktop
+text/html=firefox.desktop
+application/xhtml+xml=firefox.desktop
+application/pdf=firefox.desktop
+image/png=firefox.desktop
+image/jpeg=firefox.desktop
+image/gif=firefox.desktop
+image/webp=firefox.desktop
+image/svg+xml=firefox.desktop
+video/mp4=firefox.desktop
+video/webm=firefox.desktop
+audio/mpeg=firefox.desktop
+audio/ogg=firefox.desktop
+text/plain=firefox.desktop
+application/x-ms-dos-executable=myos-exe-runner.desktop
+application/x-msdownload=myos-exe-runner.desktop
+application/vnd.microsoft.portable-executable=myos-exe-runner.desktop
+application/x-msi=myos-exe-runner.desktop
+application/x-ms-ne-executable=myos-exe-runner.desktop
+application/x-dosexec=myos-exe-runner.desktop
+inode/directory=org.kde.dolphin.desktop

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Called by the kernel (binfmt_misc) when a Windows .exe is started directly,
+# e.g. ./setup.exe in a terminal: virus check first, then Wine or Proton.
+exec /usr/bin/myos-run-exe "$@"

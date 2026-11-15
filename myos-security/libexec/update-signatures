@@ -1,0 +1,10 @@
+#!/bin/sh
+# Download the newest ClamAV virus signatures now (run as root through pkexec).
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+systemctl stop clamav-freshclam.service 2>/dev/null
+freshclam --stdout
+code=$?
+systemctl start clamav-freshclam.service 2>/dev/null
+# Let a running scanner load the new signatures.
+systemctl reload clamav-daemon.service 2>/dev/null || true
+exit $code

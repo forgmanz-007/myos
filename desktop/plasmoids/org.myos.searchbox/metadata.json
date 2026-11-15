@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "MyOS"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Type here to search: apps, settings and files, like the Windows 10 taskbar search",
+        "Icon": "search",
+        "Id": "org.myos.searchbox",
+        "License": "GPL-2.0-or-later",
+        "Name": "Search Box",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -1,0 +1,39 @@
+#!/bin/sh
+# MyOS: opens Windows programs (.exe, .msi, .bat, .cmd) that other apps hand to the desktop
+# with myos-run-exe: virus check the first time, then Wine or Proton. Chrome, Electron apps,
+# Qt apps and anything else that uses xdg-open end up here, because xdg-open calls kde-open
+# and /usr/local/bin comes first. KDE's own kde-open refuses these files ("launching
+# executables is not allowed in this context"). Everything else goes to it unchanged.
+REAL=${MYOS_REAL_KDE_OPEN:-/usr/bin/kde-open}
+RUN_EXE=${MYOS_RUN_EXE:-myos-run-exe}
+
+# The local file a Windows program argument stands for; fails for anything else.
+windows_program() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        *.exe|*.msi|*.bat|*.cmd) ;;
+        *) return 1 ;;
+    esac
+    case "$1" in
+        file://*)
+            path=$(printf '%s' "$1" | python3 -c 'import sys, urllib.parse
+u = urllib.parse.urlsplit(sys.stdin.read())
+sys.stdout.write(urllib.parse.unquote(u.path) if u.netloc in ("", "localhost") else "")') ;;
+        *://*) return 1 ;;
+        /*) path=$1 ;;
+        *) path=$PWD/$1 ;;
+    esac
+    [ -n "$path" ] && [ -f "$path" ] || return 1
+    printf '%s\n' "$path"
+}
+
+if [ $# -eq 1 ] && program=$(windows_program "$1"); then
+    # Started as an app of its own (like a double-click), so it keeps running when the
+    # app that opened it is closed.
+    if command -v systemd-run >/dev/null 2>&1 && \
+            [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/systemd/private" ]; then
+        exec systemd-run --user --scope --quiet --collect --slice=app.slice \
+            --unit="app-myos\\x2dexe\\x2drunner-$$.scope" "$RUN_EXE" "$program"
+    fi
+    exec "$RUN_EXE" "$program"
+fi
+exec "$REAL" "$@"

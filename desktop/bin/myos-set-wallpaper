@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""Set a picture or a video as the desktop wallpaper, on every screen.
+
+    myos-set-wallpaper [--sound] [--fit] [--always-play] [--notify] FILE_OR_LINK
+
+Videos play with the "Smart Video Wallpaper Reborn" plugin. They loop, start
+muted, and pause while a window is maximized or fullscreen (saves power):
+  --sound        play the video's sound
+  --fit          show the whole picture/video (bars) instead of filling the screen
+  --always-play  keep playing even behind maximized windows
+  --notify       show errors as a desktop notification (for the right-click menu)
+A direct web link to a video or picture is downloaded to ~/Videos/Wallpapers
+(or ~/Pictures/Wallpapers) first.
+"""
+import argparse
+import json
+import mimetypes
+import os
+import re
+import shutil
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+PLUGIN = "luisbocanegra.smart.video.wallpaper.reborn"
+VIDEO_EXT = {".mp4", ".m4v", ".webm", ".mkv", ".mov", ".avi", ".ogv", ".wmv", ".mpg", ".mpeg",
+             ".ts", ".gif"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".svg", ".svgz", ".bmp", ".avif", ".jxl", ".tif",
+             ".tiff"}
+USER_AGENT = "myos-set-wallpaper/1.0"
+
+# Defaults of the video plugin that this command sets (see its config/main.xml):
+MUTE_NEVER, MUTE_ALWAYS = 4, 5        # MuteMode
+FIT, CROP = 1, 2                      # FillMode (Qt aspect ratio modes)
+PAUSE_WHEN_MAXIMIZED, PAUSE_WHEN_WINDOW_SHOWN, PAUSE_NEVER = 0, 2, 3  # PauseMode
+SLOW_NOTE = ("This PC is drawing the desktop without graphics acceleration right now, so a video "
+             "wallpaper keeps the processor busy and makes everything slower. For full speed use a "
+             "picture, for example: myos-set-wallpaper /usr/share/wallpapers/myos.svg")
+
+
+class WallpaperError(Exception):
+    pass
+
+
+def kind_of(path: Path) -> str:
+    ext = path.suffix.lower()
+    if ext in VIDEO_EXT:
+        return "video"
+    if ext in IMAGE_EXT:
+        return "image"
+    guessed = (mimetypes.guess_type(path.name)[0] or "").split("/")[0]
+    return guessed if guessed in ("video", "image") else ""
+
+
+def user_dir(name: str, fallback: str) -> Path:
+    try:
+        out = subprocess.run(["xdg-user-dir", name], capture_output=True, text=True,
+                             timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    return Path(out) if out and out != str(Path.home()) else Path.home() / fallback
+
+
+def _unique(path: Path) -> Path:
+    n, candidate = 1, path
+    while candidate.exists():
+        n += 1
+        candidate = path.with_name(f"{path.stem}-{n}{path.suffix}")
+    return candidate
+
+
+def download(url: str) -> Path:
+    if re.search(r"(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|vimeo\.com)/", url, re.I):
+        raise WallpaperError("That is a video web page, not a video file. Download the video "
+                             "first (for example with yt-dlp), then use the file.")
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        resp = urllib.request.urlopen(req, timeout=60)
+    except (urllib.error.URLError, OSError) as e:
+        raise WallpaperError(f"Could not download it: {getattr(e, 'reason', e)}") from None
+    with resp:
+        ctype = (resp.headers.get_content_type() or "").lower()
+        name = Path(urllib.parse.unquote(urllib.parse.urlparse(resp.geturl()).path)).name
+        name = re.sub(r"[^\w.() -]+", "_", name).strip(" .") or "wallpaper"
+        if kind_of(Path(name)) == "":
+            ext = mimetypes.guess_extension(ctype) or ""
+            if ctype.split("/")[0] not in ("video", "image") or not ext:
+                raise WallpaperError(f"That link is not a picture or video (it is {ctype or 'unknown'}).")
+            name += ext
+        kind = kind_of(Path(name))
+        folder = (user_dir("VIDEOS", "Videos") if kind == "video"
+                  else user_dir("PICTURES", "Pictures")) / "Wallpapers"
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = _unique(folder / name)
+        total = int(resp.headers.get("Content-Length") or 0)
+        done, next_report = 0, 10 * 1024 * 1024
+        print(f"Downloading to {dest}", flush=True)
+        try:
+            with open(dest, "wb") as f:
+                while True:
+                    chunk = resp.read(1024 * 256)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    done += len(chunk)
+                    if done >= next_report:
+                        print(f"  {done // (1024 * 1024)} MB" + (f" of {total // (1024 * 1024)} MB"
+                                                                if total else ""), flush=True)
+                        next_report += 10 * 1024 * 1024
+        except OSError as e:
+            dest.unlink(missing_ok=True)
+            raise WallpaperError(f"The download failed: {e}") from None
+    return dest
+
+
+def plugin_installed() -> bool:
+    dirs = [Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")]
+    dirs += [Path(d) for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":") if d]
+    return any((d / "plasma" / "wallpapers" / PLUGIN / "metadata.json").exists() for d in dirs)
+
+
+def weak_graphics() -> bool:
+    """Is the desktop drawn without graphics acceleration (a virtual machine, or no
+    graphics card driver yet)? Then playing a video all the time costs a lot."""
+    exe = shutil.which("myos-performance")
+    if not exe:
+        return False
+    try:
+        out = subprocess.run([exe, "graphics"], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.strip() == "weak"
+
+
+def video_script(url: str, sound: bool = False, fit: bool = False, always_play: bool = False,
+                 weak: bool = False) -> str:
+    video = {"filename": url, "enabled": True, "duration": 0, "customDuration": 0,
+             "playbackRate": 0.0, "alternativePlaybackRate": 0.0, "loop": True,
+             "dayNightCycleAssignment": 0}
+    settings = {
+        "VideoUrls": json.dumps([video]),
+        "LastVideo": url,
+        "LastVideoPosition": 0,
+        "MuteMode": MUTE_NEVER if sound else MUTE_ALWAYS,
+        "FillMode": FIT if fit else CROP,
+        "PauseMode": (PAUSE_NEVER if always_play
+                      else PAUSE_WHEN_WINDOW_SHOWN if weak else PAUSE_WHEN_MAXIMIZED),
+    }
+    return f"""
+var plugin = {json.dumps(PLUGIN)};
+var settings = {json.dumps(settings)};
+desktops().forEach(function (desktop) {{
+    desktop.wallpaperPlugin = plugin;
+    desktop.currentConfigGroup = ["Wallpaper", plugin, "General"];
+    for (var key in settings) {{
+        desktop.writeConfig(key, settings[key]);
+    }}
+    desktop.reloadConfig();
+}});
+"""
+
+
+def image_script(url: str, fit: bool = False) -> str:
+    # org.kde.image FillMode: 2 = crop (fill the screen), 1 = fit
+    return f"""
+var url = {json.dumps(url)};
+desktops().forEach(function (desktop) {{
+    desktop.wallpaperPlugin = "org.kde.image";
+    desktop.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+    desktop.writeConfig("Image", url);
+    desktop.writeConfig("FillMode", {FIT if fit else CROP});
+    desktop.reloadConfig();
+}});
+"""
+
+
+def run_desktop_script(script: str) -> None:
+    if not shutil.which("busctl"):
+        raise WallpaperError("busctl is missing, so the desktop can't be changed.")
+    try:
+        r = subprocess.run(["busctl", "--user", "call", "org.kde.plasmashell", "/PlasmaShell",
+                            "org.kde.PlasmaShell", "evaluateScript", "s", script],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise WallpaperError(f"The desktop did not respond: {e}") from None
+    if r.returncode != 0:
+        detail = (r.stderr or r.stdout).strip()
+        if "plasmashell" in detail and ("not provided" in detail or "not found" in detail.lower()):
+            raise WallpaperError("The desktop (Plasma) is not running.")
+        raise WallpaperError(f"The desktop refused the change: {detail or 'unknown error'}")
+
+
+def set_wallpaper(source: str, sound=False, fit=False, always_play=False) -> str:
+    if re.match(r"^https?://", source, re.I):
+        path = download(source)
+    else:
+        path = Path(os.path.expandvars(os.path.expanduser(source))).resolve()
+        if not path.is_file():
+            raise WallpaperError(f"{path} does not exist.")
+    kind = kind_of(path)
+    if kind == "video":
+        if not plugin_installed():
+            raise WallpaperError("Video wallpapers need the Smart Video Wallpaper Reborn plugin. "
+                                 "Right-click the desktop > Desktop and Wallpaper > Get New Plugins, "
+                                 "and install it.")
+        weak = weak_graphics()
+        run_desktop_script(video_script(path.as_uri(), sound, fit, always_play, weak))
+        how = "with sound" if sound else "muted"
+        pause = ("keeps playing" if always_play else "pauses while any window is open" if weak
+                 else "pauses while a window is maximized")
+        message = f"Video wallpaper set: {path.name} (loops, {how}, {pause})."
+        return f"{message}\n{SLOW_NOTE}" if weak else message
+    if kind == "image":
+        if shutil.which("plasma-apply-wallpaperimage") and not fit:
+            r = subprocess.run(["plasma-apply-wallpaperimage", str(path)], capture_output=True,
+                               text=True, timeout=30)
+            if r.returncode == 0:
+                return f"Wallpaper set: {path.name}."
+        run_desktop_script(image_script(path.as_uri(), fit))
+        return f"Wallpaper set: {path.name}."
+    raise WallpaperError(f"{path.name} is not a picture or video file.")
+
+
+def notify(title: str, text: str) -> None:
+    try:
+        subprocess.run(["notify-send", "-a", "Wallpaper", "-i", "preferences-desktop-wallpaper",
+                        title, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="myos-set-wallpaper",
+                                     description="Set a picture or video as the desktop wallpaper.")
+    parser.add_argument("source", help="picture or video file, or a direct web link to one")
+    parser.add_argument("--sound", action="store_true", help="play the video's sound")
+    parser.add_argument("--fit", action="store_true", help="show the whole picture instead of filling")
+    parser.add_argument("--always-play", action="store_true",
+                        help="keep the video playing behind maximized windows")
+    parser.add_argument("--notify", action="store_true", help="report errors as a notification")
+    args = parser.parse_args(argv)
+    try:
+        message = set_wallpaper(args.source, args.sound, args.fit, args.always_play)
+        print(message)
+        if args.notify and SLOW_NOTE in message:      # from the right-click menu nobody sees the text
+            notify("Video wallpaper", SLOW_NOTE)
+        return 0
+    except WallpaperError as e:
+        print(f"Could not set the wallpaper: {e}", file=sys.stderr)
+        if args.notify:
+            notify("Could not set the wallpaper", str(e))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

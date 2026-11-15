@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Visual effects of the desktop: tuned for speed or for looks.
+
+    myos-performance status     what is set, and what this PC's graphics are
+    myos-performance auto       let the system choose (the default)
+    myos-performance fast       best performance: no animations, no blur
+    myos-performance normal     best appearance: the desktop's usual effects
+    myos-performance graphics   prints "weak", "ok" or "unknown"
+
+With "auto" the system picks "fast" when the desktop is drawn without a real
+graphics card driver (in a virtual machine, or before the driver is installed)
+and "normal" otherwise. It looks again at every login, so the effects come
+back by themselves once a driver is installed. (At login it waits 20 seconds
+first, so it never gets in the way of the desktop starting.)
+"""
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# Names of renderers that draw on the processor or through a virtual machine.
+WEAK = re.compile(r"llvmpipe|softpipe|swrast|software rasterizer|virgl|svga3d|vmware|virtualbox|"
+                  r"parallels|qxl", re.I)
+
+# What "fast" changes; "normal" removes these settings again, which brings the defaults back.
+SETTINGS = [
+    ("kdeglobals", "KDE", "AnimationDurationFactor", "0"),      # no animations
+    ("kwinrc", "Plugins", "blurEnabled", "false"),              # no blur behind menus and the taskbar
+    ("kwinrc", "Plugins", "contrastEnabled", "false"),
+]
+EFFECTS = ["blur", "contrast"]
+TEXT = {"fast": "best performance", "normal": "best appearance"}
+LOGIN_DELAY = 20.0      # seconds the login check waits for the desktop to finish starting
+
+
+class PerformanceError(Exception):
+    pass
+
+
+def state_path() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "myos-performance.json"
+
+
+def load_state() -> dict:
+    try:
+        data = json.loads(state_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
+def _run(argv, timeout=15):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except (OSError, subprocess.SubprocessError) as e:
+        return 127, "", str(e)
+
+
+def kwin_info(wait: float = 0.0) -> str:
+    """The window manager's own report on how it draws the desktop ('' if it can't be asked)."""
+    deadline = time.monotonic() + wait
+    while True:
+        code, out, _ = _run(["busctl", "--user", "--json=short", "call", "org.kde.KWin", "/KWin",
+                             "org.kde.KWin", "supportInformation"])
+        if code == 0:
+            try:
+                return str(json.loads(out)["data"][0])
+            except (ValueError, KeyError, IndexError, TypeError):
+                return ""
+        if time.monotonic() >= deadline:
+            return ""
+        time.sleep(1.0)
+
+
+def renderer(info: str) -> str:
+    m = re.search(r"^OpenGL renderer string:[ \t]*(.+)$", info, re.M)
+    return m.group(1).strip() if m else ""
+
+
+def graphics_class(info: str) -> str:
+    """'weak' (no real graphics acceleration), 'ok', or 'unknown'."""
+    if not info:
+        return "unknown"
+    name = renderer(info)
+    if name:
+        return "weak" if WEAK.search(name) else "ok"
+    if re.search(r"^Compositing Type:[ \t]*QPainter", info, re.M | re.I):
+        return "weak"
+    return "unknown"
+
+
+def current_profile() -> str:
+    """What the settings say right now: 'fast' if animations are off, else 'normal'."""
+    code, out, _ = _run(["kreadconfig6", "--file", "kdeglobals", "--group", "KDE",
+                         "--key", "AnimationDurationFactor"])
+    try:
+        return "fast" if code == 0 and out.strip() and float(out.strip()) == 0 else "normal"
+    except ValueError:
+        return "normal"
+
+
+def apply(profile: str) -> None:
+    """Write the settings and tell the running desktop about them."""
+    if not shutil.which("kwriteconfig6"):
+        raise PerformanceError("kwriteconfig6 is missing, so the desktop's settings can't be changed.")
+    for rcfile, group, key, value in SETTINGS:
+        argv = ["kwriteconfig6", "--file", rcfile, "--group", group, "--key", key, "--notify"]
+        argv += [value] if profile == "fast" else ["--delete"]
+        code, out, err = _run(argv)
+        if code != 0:
+            raise PerformanceError(f"The setting {key} could not be changed: {(err or out).strip()}")
+    # The running window manager: read the settings again and switch the effects now.
+    _run(["busctl", "--user", "call", "org.kde.KWin", "/KWin", "org.kde.KWin", "reconfigure"])
+    method = "unloadEffect" if profile == "fast" else "loadEffect"
+    for effect in EFFECTS:
+        _run(["busctl", "--user", "call", "org.kde.KWin", "/Effects", "org.kde.kwin.Effects",
+              method, "s", effect])
+
+
+def choose(mode: str, graphics: str, state: dict) -> str:
+    """The profile a mode means on this PC."""
+    if mode in ("fast", "normal"):
+        return mode
+    if graphics == "weak":
+        return "fast"
+    if graphics == "ok":
+        return "normal"
+    return state.get("applied") or current_profile()     # can't tell: leave it as it is
+
+
+def describe(graphics: str, name: str) -> str:
+    if graphics == "weak":
+        return f"{name or 'software drawing'} (no graphics card driver in use, so effects cost a lot here)"
+    if graphics == "ok":
+        return name
+    return "could not be checked (is the desktop running?)"
+
+
+def set_mode(mode: str, login: bool = False) -> str:
+    state = load_state()
+    if login and state.get("mode", "auto") != "auto":
+        return ""                                   # you chose yourself: nothing to do at login
+    info = kwin_info(wait=40.0 if login else 0.0)
+    graphics = graphics_class(info)
+    profile = choose(mode, graphics, state)
+    if login and (graphics == "unknown" or state.get("applied") == profile):
+        return ""                                   # already right, or not possible to tell
+    apply(profile)
+    save_state({"mode": mode, "applied": profile, "renderer": renderer(info)})
+    if mode == "auto":
+        return f"The system chooses: {TEXT[profile]} (graphics: {describe(graphics, renderer(info))})."
+    if profile == "fast":
+        return "Best performance: animations and blur are off."
+    return "Best appearance: the desktop's usual animations and effects are on."
+
+
+def status(short: bool) -> str:
+    state = load_state()
+    mode = state.get("mode", "auto")
+    applied = state.get("applied") or current_profile()
+    if short:
+        return f"{mode} {applied}"
+    info = kwin_info()
+    how = "chosen by the system" if mode == "auto" else "chosen by you"
+    return (f"Visual effects: {TEXT[applied]} ({how})\n"
+            f"Graphics: {describe(graphics_class(info), renderer(info))}\n"
+            "Change it with: myos-performance fast | normal | auto")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="myos-performance",
+                                     description="Desktop visual effects: best performance or best appearance.")
+    parser.add_argument("command", choices=["status", "auto", "fast", "normal", "graphics"])
+    parser.add_argument("--short", action="store_true", help="status as two words: the choice and what is in use")
+    parser.add_argument("--login", action="store_true",
+                        help="with auto: only act if the automatic choice changed (used at login)")
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "status":
+            print(status(args.short))
+        elif args.command == "graphics":
+            print(graphics_class(kwin_info()))
+        else:
+            login = args.login and args.command == "auto"
+            if login:
+                time.sleep(float(os.environ.get("MYOS_PERFORMANCE_LOGIN_DELAY", LOGIN_DELAY)))
+            message = set_mode(args.command, login=login)
+            if message:
+                print(message)
+        return 0
+    except PerformanceError as e:
+        print(f"Could not change the visual effects: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

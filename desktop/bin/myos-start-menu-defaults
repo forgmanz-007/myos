@@ -1,0 +1,25 @@
+#!/bin/sh
+# Start menu favorites for new users: Firefox, File Explorer, DeepSeek Shell,
+# ClamAV Security and Settings, instead of KDE's list (Discover, Kontact, ...).
+#
+# Why here and not in the desktop layout script: Plasma 6 copies the Start
+# menu's built-in default favorites into its favorites database the moment the
+# Start button is created, before a layout script can change its settings
+# (found in the test VM, Plasma 6.3). So the built-in default itself has to be
+# ours. APT runs this again after every install or update (see
+# /etc/apt/apt.conf.d/80myos-start-menu), so a Plasma update cannot undo it.
+# Users who already logged in keep their own favorites.
+F=${MYOS_KICKOFF_CONFIG:-/usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/config/main.xml}
+WANT="firefox.desktop,org.kde.dolphin.desktop,deepseek-shell.desktop,myos-security.desktop,systemsettings.desktop"
+
+[ -f "$F" ] || exit 0
+grep -qF "<default>$WANT</default>" "$F" && exit 0
+awk -v want="$WANT" '
+    /<entry name="favorites"/ { inside = 1 }
+    inside && /<default>/ { sub(/<default>[^<]*<\/default>/, "<default>" want "</default>"); inside = 0 }
+    { print }' "$F" > "$F.myos-new" && cat "$F.myos-new" > "$F"
+rm -f "$F.myos-new"
+if ! grep -qF "<default>$WANT</default>" "$F"; then
+    echo "myos-start-menu-defaults: could not set the Start menu favorites in $F" >&2
+    exit 1
+fi

@@ -1,0 +1,8 @@
+[Unit]
+Description=Stop the idle virus scanner when memory is short (frees about 1 GB)
+Documentation=man:clamd(8)
+ConditionPathExists=/usr/libexec/myos/clamd-idle-stop
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/myos/clamd-idle-stop

@@ -1,0 +1,4 @@
+#!/bin/sh
+PREFIX="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export PYTHONPATH="$PREFIX/lib/myos-security${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -P -m myos_security run-exe "$@"

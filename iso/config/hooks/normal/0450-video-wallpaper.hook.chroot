@@ -1,0 +1,45 @@
+#!/bin/bash
+# Video wallpapers: installs the "Smart Video Wallpaper Reborn" plugin for
+# Plasma 6 system-wide. It plays a video as the desktop background, loops it,
+# and pauses it while a window is maximized or fullscreen.
+set -euo pipefail
+. /etc/myos/build.conf
+
+ID=luisbocanegra.smart.video.wallpaper.reborn
+REPO=luisbocanegra/plasma-smart-video-wallpaper-reborn
+
+if [ "$VIDEO_WALLPAPERS" != yes ]; then
+    rm -f /usr/share/kio/servicemenus/myos-video-wallpaper.desktop
+    echo "Video wallpapers switched off in config.env."
+    exit 0
+fi
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+if [ -n "$VIDEO_WALLPAPER_VERSION" ]; then release="tags/$VIDEO_WALLPAPER_VERSION"; else release=latest; fi
+json=$(curl -fsSL --retry 5 --retry-delay 10 -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$REPO/releases/$release")
+url=$(printf '%s' "$json" | grep -oE '"browser_download_url": *"[^"]+\.tar\.gz"' \
+    | sed -E 's/.*"(https[^"]+)"$/\1/' | head -n1)
+if [ -z "$url" ]; then
+    echo "No download of the video wallpaper plugin found on GitHub." >&2
+    exit 1
+fi
+echo "Downloading $(basename "$url")"
+curl -fSL --retry 3 -o "$TMP/plugin.tar.gz" "$url"
+mkdir "$TMP/unpacked"
+tar -xzf "$TMP/plugin.tar.gz" -C "$TMP/unpacked"
+
+# The archive holds the plugin folder (the one whose metadata.json has our id).
+meta=$(grep -rlE --include=metadata.json "\"Id\": *\"$ID\"" "$TMP/unpacked" | head -n1 || true)
+if [ -z "$meta" ] || [ ! -f "$(dirname "$meta")/contents/ui/main.qml" ]; then
+    echo "The download does not contain the video wallpaper plugin." >&2
+    exit 1
+fi
+dest=/usr/share/plasma/wallpapers/$ID
+rm -rf "$dest"
+install -d "$dest"
+cp -a "$(dirname "$meta")/." "$dest/"
+chown -R root:root "$dest"
+chmod -R u=rwX,go=rX "$dest"
+echo "Video wallpaper plugin installed in $dest"

@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Service
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/vnd.microsoft.portable-executable;application/x-msi;application/x-ms-ne-executable;
+Actions=compat;runProton;runWine;scan;compress;
+X-KDE-Submenu=Windows program
+X-KDE-Priority=TopLevel
+Icon=application-x-ms-dos-executable
+
+[Desktop Action compat]
+Name=Compatibility settings (Wine / Proton)…
+Icon=configure
+Exec=myos-exe-properties %f
+
+[Desktop Action runProton]
+Name=Run with Proton (this time)
+Icon=input-gaming
+Exec=myos-run-exe --runner=proton %f
+
+[Desktop Action runWine]
+Name=Run with Wine (this time)
+Icon=system-run
+Exec=myos-run-exe --runner=wine %f
+
+[Desktop Action scan]
+Name=Scan for viruses
+Icon=security-high
+Exec=myos-run-exe --scan-only %f
+
+[Desktop Action compress]
+Name=Compress to save disk space…
+Icon=archive-insert
+Exec=myos-compress %f

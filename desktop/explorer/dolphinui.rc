@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+<!DOCTYPE gui SYSTEM "kpartgui.dtd">
+<gui name="dolphin" version="43">
+    <!--
+      File Explorer (KDE's Dolphin) laid out like Windows 10's File Explorer:
+        - the menu bar holds "File", "Home" and "View", where Windows 10 has its ribbon tabs;
+        - below it: back, forward, up, the address bar, refresh and search;
+        - Windows names for some entries ("Open new window", "Options", "Layout", "Hidden items").
+      Based on Dolphin 25.04's own layout. The number in the line above (43) must stay equal to
+      Dolphin's: KDE uses this file instead of Dolphin's built-in layout only while it is not
+      lower, so when a Dolphin update changes its layout, Dolphin's own comes back. (KDE reads
+      that number from the first "version" after the word "gui", so this note stays below it.)
+      For new users /etc/xdg/dolphinrc keeps the menu bar shown (see there).
+      Installed by desktop/install.sh into /usr/local/share/kxmlgui5/dolphin/.
+    -->
+    <MenuBar noMerge="1">
+        <Menu name="file">
+            <text context="@title:menu">&amp;File</text>
+            <Action name="file_new" />
+            <Action name="new_tab" />
+            <Action name="open_terminal" />
+            <Separator/>
+            <Action name="options_configure" />
+            <Action name="help_contents" />
+            <Action name="help_about_app" />
+            <Separator/>
+            <Action name="file_close" />
+            <Action name="file_quit" />
+        </Menu>
+        <Menu name="home">
+            <text context="@title:menu">&amp;Home</text>
+            <Action name="edit_cut" />
+            <Action name="edit_copy" />
+            <Action name="edit_paste" />
+            <Action name="copy_location" />
+            <Separator/>
+            <Action name="movetotrash" />
+            <Action name="deletefile" />
+            <Action name="renamefile" />
+            <Action name="duplicate" />
+            <Separator/>
+            <Action name="new_menu" />
+            <Separator/>
+            <Action name="properties" />
+            <Separator/>
+            <Action name="edit_select_all" />
+            <Action name="invert_selection" />
+            <Separator/>
+            <Action name="add_to_places" />
+            <Action name="edit_undo" />
+        </Menu>
+        <!-- Named "settings" because KDE adds its "Show Toolbar" entry to the menu of that name;
+             without one it would make a menu with no title. -->
+        <Menu name="settings">
+            <text context="@title:menu">&amp;View</text>
+            <Action name="panels" />
+            <Action name="view_mode" />
+            <Action name="sort" />
+            <Action name="additional_info" />
+            <Action name="show_in_groups" />
+            <Separator/>
+            <Action name="show_preview" />
+            <Action name="show_hidden_files" />
+            <Separator/>
+            <Action name="view_redisplay" />
+            <Action name="split_view_menu" />
+            <Separator/>
+            <Action name="view_properties" />
+            <Action name="options_configure" />
+            <Action name="options_show_menubar" />
+        </Menu>
+    </MenuBar>
+    <State name="new_file" >
+        <disable>
+            <Action name="edit_undo" />
+            <Action name="edit_redo" />
+            <Action name="edit_cut" />
+            <Action name="renamefile" />
+            <Action name="movetotrash" />
+            <Action name="deletefile" />
+            <Action name="invert_selection" />
+            <Separator/>
+            <Action name="go_back" />
+            <Action name="go_forward" />
+        </disable>
+    </State>
+    <State name="has_selection" >
+        <enable>
+            <Action name="invert_selection" />
+        </enable>
+    </State>
+    <State name="has_no_selection" >
+        <disable>
+            <Action name="delete_shortcut" />
+            <Action name="invert_selection" />
+        </disable>
+    </State>
+    <!-- Like Windows 10's address row. The menu button shows only while the menu bar is hidden. -->
+    <ToolBar noMerge="1" name="mainToolBar" >
+        <text context="@title:menu">Main Toolbar</text>
+        <Action name="go_back" />
+        <Action name="go_forward" />
+        <Action name="go_up" />
+        <Action name="url_navigators" />
+        <Action name="view_redisplay" />
+        <Action name="toggle_search" />
+        <Action name="hamburger_menu" />
+    </ToolBar>
+    <ActionProperties scheme="Default">
+        <Action priority="0" name="go_back"/>
+        <Action priority="0" name="go_forward"/>
+        <Action priority="0" name="go_up"/>
+        <Action priority="0" name="go_home"/>
+        <Action priority="0" name="stop"/>
+        <Action priority="0" name="icons"/>
+        <Action priority="0" name="compact"/>
+        <Action priority="0" name="details"/>
+        <Action priority="0" name="view_mode" />
+        <Action priority="0" name="view_zoom_in"/>
+        <Action priority="0" name="view_zoom_reset"/>
+        <Action priority="0" name="view_zoom_out"/>
+        <Action priority="0" name="edit_cut"/>
+        <Action priority="0" name="edit_copy"/>
+        <Action priority="0" name="edit_paste"/>
+        <Action priority="0" name="toggle_search"/>
+        <Action priority="0" name="toggle_filter"/>
+        <Action priority="0" name="view_redisplay"/>
+        <!-- Windows names. (Not for Cut, Copy, Copy Location, Move to Trash, Delete, Rename:
+             Dolphin sets their texts itself whenever the selection changes.) -->
+        <Action name="file_new" text="Open new window"/>
+        <Action name="new_tab" text="Open new tab"/>
+        <Action name="file_close" text="Close tab"/>
+        <Action name="file_quit" text="Close"/>
+        <Action name="options_configure" text="Options"/>
+        <Action name="help_contents" text="Help"/>
+        <Action name="help_about_app" text="About File Explorer"/>
+        <Action name="new_menu" text="New"/>
+        <Action name="panels" text="Panes"/>
+        <Action name="view_mode" text="Layout"/>
+        <Action name="sort" text="Sort by"/>
+        <Action name="show_hidden_files" text="Hidden items"/>
+        <Action name="view_redisplay" text="Refresh"/>
+    </ActionProperties>
+</gui>

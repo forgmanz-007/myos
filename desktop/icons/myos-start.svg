@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- The MyOS hexagon for the Start button: drawn small in a big square, because the
+       taskbar shows this picture at full taskbar height (like the 16 px logo on Windows 10). -->
+  <path fill="#ffffff" fill-rule="evenodd"
+        d="M20 10.5 28.23 15.25V24.75L20 29.5 11.77 24.75V15.25Z
+           M16.4 20a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0Z"/>
+</svg>

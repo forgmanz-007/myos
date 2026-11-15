@@ -1,0 +1,57 @@
+#!/bin/bash
+# The parts of the Windows 10 look that MyOS does not draw itself, at fixed versions
+# checked against their SHA-256 sums:
+#   - Tiled Menu: the Start menu with the A-Z app list and tiles (GPL-2.0+)
+#   - We10X: Windows 10-style icons (GPL-3.0), without the pictures that copy Microsoft logos
+#   - Selawik: a free font with the letter widths of Windows' Segoe UI (OFL-1.1)
+# /usr/libexec/myos/install-look (from desktop/) puts them in place.
+set -euo pipefail
+
+TILEDMENU_COMMIT=21c85405466f686af59278c40070b4dd770e88c7
+TILEDMENU_SHA256=948046cca1bb36bbe9c7ec5fe3dd5dff6288b17e9ce6d503086531abc8ddd6cd
+WE10X_COMMIT=0f52ff2dce554146f8f76ab2c7a5968fd773400d
+WE10X_SHA256=77a103035d9628423d3ca080e09eb73b262bdc1fe51bfe34ae8b86990109f91c
+SELAWIK_VERSION=1.01
+SELAWIK_SHA256=3f62c51e05e3b5a1e6241cf92a371f0be2ea1183aa87b30718bbd40832a8d423
+SELAWIK_LICENSE_SHA256=77b7c2506d4efb22e09c8ccf10159f4956eab3ef7c007fef95de136bcf45300c
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+# fetch URL FILE SHA256
+fetch() {
+    echo "Downloading $1"
+    curl -fSL --retry 5 --retry-delay 10 -o "$2" "$1"
+    if ! echo "$3  $2" | sha256sum -c --quiet -; then
+        echo "The download from $1 is not the expected file (its SHA-256 differs)." >&2
+        exit 1
+    fi
+}
+
+# unpack ARCHIVE FOLDER  (a GitHub archive has one top folder)
+unpack() {
+    mkdir "$2"
+    tar -xzf "$1" -C "$2" --strip-components=1 --no-same-owner
+}
+
+fetch "https://codeload.github.com/Zren/plasma-applet-tiledmenu/tar.gz/$TILEDMENU_COMMIT" \
+    "$TMP/tiledmenu.tar.gz" "$TILEDMENU_SHA256"
+unpack "$TMP/tiledmenu.tar.gz" "$TMP/tiledmenu"
+/usr/libexec/myos/install-look menu "$TMP/tiledmenu"
+
+fetch "https://codeload.github.com/yeyushengfan258/We10X-icon-theme/tar.gz/$WE10X_COMMIT" \
+    "$TMP/we10x.tar.gz" "$WE10X_SHA256"
+unpack "$TMP/we10x.tar.gz" "$TMP/we10x"
+/usr/libexec/myos/install-look icons "$TMP/we10x"
+
+fetch "https://github.com/microsoft/Selawik/releases/download/$SELAWIK_VERSION/Selawik_Release.zip" \
+    "$TMP/selawik.zip" "$SELAWIK_SHA256"
+fetch "https://raw.githubusercontent.com/microsoft/Selawik/$SELAWIK_VERSION/LICENSE.txt" \
+    "$TMP/LICENSE.txt" "$SELAWIK_LICENSE_SHA256"
+python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' \
+    "$TMP/selawik.zip" "$TMP/selawik"
+cp "$TMP/LICENSE.txt" "$TMP/selawik/LICENSE.txt"
+/usr/libexec/myos/install-look font "$TMP/selawik"
+
+# File Explorer's title bar shows just the folder (made from the installed KWin's files).
+/usr/libexec/myos/title-bars

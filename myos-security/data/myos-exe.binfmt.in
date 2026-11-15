@@ -1,0 +1,4 @@
+# Windows programs (files starting with "MZ") that are started directly, for
+# example ./setup.exe in a terminal, go through the virus check and then run
+# with Wine or Proton.
+:myos-exe:M::MZ::@LIBEXECDIR@/run-exe-binfmt:

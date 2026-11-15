@@ -1,0 +1,37 @@
+#!/bin/bash
+# Speed: fewer background jobs, faster app installs and app starts, and a virus
+# scanner that gives its memory back when memory is short. The settings files themselves
+# come from performance/install.sh.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# 1. Virus scanner. Stop it when idle and memory is short (the timer), and don't let the signature
+#    updater start it just to say "new signatures": a running scanner notices
+#    them by itself within the hour (SelfCheck in clamd.conf).
+echo "clamav-freshclam clamav-freshclam/NotifyClamd boolean false" | debconf-set-selections
+if [ -f /etc/clamav/freshclam.conf ]; then
+    sed -i 's/^NotifyClamd\b/#NotifyClamd/' /etc/clamav/freshclam.conf
+fi
+systemctl enable myos-clamd-idle.timer
+
+# 2. Manual pages: no index rebuild after every app install and every night.
+#    "man NAME" works without the index; only searching it (man -k) needs one.
+echo "man-db man-db/auto-update boolean false" | debconf-set-selections
+rm -f /var/lib/man-db/auto-update
+systemctl mask man-db.timer
+
+# 3. Timers: hourly snapshots are not used (snapshots are taken before admin
+#    changes instead); weekly TRIM keeps SSDs fast.
+systemctl disable snapper-timeline.timer 2>/dev/null || true
+systemctl enable fstrim.timer 2>/dev/null || true
+
+# 4. Memory: compressed memory at every start; when memory really runs out, the
+#    kernel closes the app using the most (set up by memory-setup).
+systemctl enable myos-memory.service
+
+# 5. The built-in apps are Python programs. Prepare their bytecode now, so they
+#    don't compile themselves on every start (users can't write to /usr/lib).
+for d in /usr/lib/deepseek-shell /usr/lib/myos-security /usr/lib/myos-taskmanager; do
+    if [ -d "$d" ]; then python3 -m compileall -q "$d" || true; fi
+done
+echo "Speed settings applied."

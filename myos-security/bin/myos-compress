@@ -1,0 +1,6 @@
+#!/bin/sh
+PREFIX="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export PYTHONPATH="$PREFIX/lib/myos-security${PYTHONPATH:+:$PYTHONPATH}"
+: "${MYOS_DISK_USAGE_HELPER:=$PREFIX/libexec/myos-security/disk-usage}"
+export MYOS_DISK_USAGE_HELPER
+exec python3 -P -m myos_security compress "$@"

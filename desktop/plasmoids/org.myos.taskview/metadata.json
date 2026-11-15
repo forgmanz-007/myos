@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "MyOS"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "Button that shows all open windows, like Task View in Windows 10",
+        "Icon": "view-app-grid-symbolic",
+        "Id": "org.myos.taskview",
+        "License": "GPL-2.0-or-later",
+        "Name": "Task View",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

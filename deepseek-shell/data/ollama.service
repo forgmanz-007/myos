@@ -1,0 +1,23 @@
+[Unit]
+Description=Ollama, the local AI engine used by DeepSeek Shell
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+# If memory runs out and Linux stops the model process, keep the engine itself
+# running: it loads the model again for the next question.
+OOMPolicy=continue
+# The AI may use every core, but the desktop and your apps go first.
+Nice=5
+Environment="HOME=/usr/share/ollama"
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Environment="OLLAMA_KEEP_ALIVE=5m"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+
+[Install]
+WantedBy=multi-user.target

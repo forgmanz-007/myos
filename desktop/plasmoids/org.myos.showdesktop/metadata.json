@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "MyOS"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "Thin strip at the end of the taskbar that shows the desktop, like in Windows 10",
+        "Icon": "user-desktop",
+        "Id": "org.myos.showdesktop",
+        "License": "GPL-2.0-or-later",
+        "Name": "Show Desktop (strip)",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "MyOS"
+            }
+        ],
+        "Category": "",
+        "Description": "Dark, flat and square taskbar and Start menu in the style of Windows 10",
+        "EnabledByDefault": true,
+        "Id": "myos10",
+        "License": "LGPL-2.0-or-later",
+        "Name": "MyOS 10",
+        "Version": "1.0",
+        "Website": ""
+    },
+    "X-Plasma-API": "5.0"
+}

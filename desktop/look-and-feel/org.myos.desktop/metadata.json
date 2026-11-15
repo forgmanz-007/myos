@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [{ "Name": "MyOS" }],
+        "Description": "Windows 10-style desktop: dark taskbar with Start menu tiles, search box and Task View; white windows with wide minimize, maximize and close buttons",
+        "Id": "org.myos.desktop",
+        "License": "GPL-2.0+",
+        "Name": "Windows 10 Style",
+        "Version": "2.0"
+    },
+    "X-Plasma-APIVersion": "2"
+}

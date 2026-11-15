@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+"""Installs the downloaded parts of the Windows 10 look (the ISO build calls this from
+iso/config/hooks/normal/0420-windows10-look.hook.chroot, after checking the downloads).
+
+    myos-install-look menu  TILED_MENU_SOURCE [DEST]   the Start menu with tiles (Tiled Menu)
+    myos-install-look icons WE10X_SOURCE      [DEST]   Windows 10-style icons (We10X), without
+                                                      the pictures that copy Microsoft logos
+    myos-install-look font  SELAWIK_FOLDER    [DEST]   the Selawik font (free; same letter
+                                                      widths as Windows' Segoe UI)
+"""
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+MENU_ID = "com.github.zren.tiledmenu"
+MENU_DEST = f"/usr/share/plasma/plasmoids/{MENU_ID}"
+ICONS_DEST = "/usr/share/icons/We10X"
+FONT_DEST = "/usr/share/fonts/truetype/selawik"
+
+# What the icon theme's own install.sh copies for its default (light) version.
+ICON_FOLDERS = ("actions", "animations", "apps", "categories", "devices", "emotes", "emblems",
+                "mimes", "places", "preferences")
+STATUS_SIZES = ("16", "22", "24", "32", "symbolic")
+LINK_FOLDERS = ("actions", "apps", "categories", "devices", "emotes", "emblems", "mimes",
+                "places", "status", "preferences")
+
+# Pictures that copy logos of Microsoft and its products (Windows, Edge, Office, Skype,
+# Teams, VS Code, Minecraft): MyOS leaves them out, under every name that shows them.
+# (In this theme web-browser is the Edge logo and the LibreOffice icons are Office's;
+# the Breeze icons fill these gaps.)
+MICROSOFT_LOGOS = (
+    "start-here", "distributor-logo-windows", "folder-windows", "web-browser",
+    "applications-office", "libreoffice", "libreoffice-writer", "libreoffice-calc",
+    "libreoffice-impress", "libreoffice-base", "libreoffice-draw", "libreoffice-math",
+    "libreoffice-oasis-web", "libreoffice-template",
+    "okular",          # Outlook's logo, for the PDF viewer
+    "hwinfo",          # a chip with a CPU maker's logo, for Info Center
+    "copilot", "goa-account-exchange",         # Copilot, Exchange
+    "theme-config", "preferences-desktop-icons",   # Microsoft's four squares
+    "wine", "wine-uninstaller", "wine-winecfg", "wine-winefile", "wine-winetricks",
+    "microsoft-edge", "microsoft-edge-beta", "microsoft-edge-dev",
+    "ms-excel", "ms-office", "ms-onenote", "ms-outlook", "ms-powerpoint", "ms-word",
+    "skype", "teams-for-linux", "visualstudiocode", "visual-studio-code-insiders", "minecraft",
+    "preferences-system-windows", "preferences-system-network-server-share-windows",
+    "application-x-ms-wim", "application-x-wine-extension-cpl",
+    "application-msonenote", "application-vnd.ms-access",
+)
+# File types whose pictures show Microsoft logos get the theme's neutral pictures instead.
+NEUTRAL = {
+    # Windows programs (.exe, .msi): the gear, as for other programs
+    "application-x-executable": (
+        "application-x-ms-dos-executable", "application-x-msdownload",
+        "application-vnd.microsoft.portable-executable"),
+    "x-office-document": (
+        "application-vnd.ms-word", "application-msword-template",
+        "application-vnd.openxmlformats-officedocument.wordprocessingml.template"),
+    "x-office-spreadsheet": (
+        "application-vnd.ms-excel", "application-vnd.ms-excel.template.macroenabled.12",
+        "application-vnd.ms-excel.addin.macroenabled.12",
+        "application-vnd.openxmlformats-officedocument.spreadsheetml.template"),
+    "x-office-presentation": (
+        "application-vnd.ms-powerpoint", "application-vnd.ms-powerpoint.template.macroenabled.12",
+        "application-vnd.ms-powerpoint.addin.macroenabled.12"),
+}
+
+
+def fail(message: str) -> None:
+    print(f"myos-install-look: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def copy_tree(src: Path, dest: Path) -> None:
+    """Like the theme installer's "cp -r" (GNU): merges folders, keeps links as links, and a
+    link replaces a file of the same name (the theme's links/ folder relies on that)."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for entry in os.scandir(src):
+        s, d = Path(entry.path), dest / entry.name
+        if entry.is_symlink():
+            if d.is_symlink() or d.is_file():
+                d.unlink()
+            elif d.is_dir():
+                shutil.rmtree(d)
+            d.symlink_to(os.readlink(s))
+        elif entry.is_dir():
+            if d.is_symlink() or d.is_file():
+                d.unlink()
+            copy_tree(s, d)
+        else:
+            if d.is_symlink():
+                d.unlink()      # never write through a link
+            shutil.copy2(s, d)
+
+
+def readable(path: Path) -> None:
+    """Owned by root (when run as root), readable by everyone."""
+    for p in [path, *path.rglob("*")]:
+        if p.is_symlink():
+            continue
+        if os.geteuid() == 0:
+            os.chown(p, 0, 0)
+        p.chmod(0o755 if p.is_dir() else 0o644)
+
+
+# ── Start menu ───────────────────────────────────────────────────────────────
+def plasma_version() -> tuple:
+    """The installed Plasma's version, e.g. (6, 3); () if unknown.
+    (MYOS_PLASMA_VERSION=6.3 pretends a version, for tests.)"""
+    text = os.environ.get("MYOS_PLASMA_VERSION")
+    if text is None:
+        try:
+            text = subprocess.run(["dpkg-query", "-W", "-f=${Version}", "plasma-desktop"],
+                                  capture_output=True, text=True, check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            return ()
+    m = re.match(r"(?:\d+:)?(\d+)\.(\d+)", text.strip())
+    return (int(m.group(1)), int(m.group(2))) if m else ()
+
+
+def install_menu(source: Path, dest: Path) -> None:
+    package = source / "package"
+    meta = package / "metadata.json"
+    if not meta.is_file() or f'"{MENU_ID}"' not in meta.read_text(encoding="utf-8"):
+        fail(f"{source} does not contain Tiled Menu")
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(package, dest, symlinks=True)
+    # Plasma 6.4 renamed the list of favourite apps that Tiled Menu builds on, and this Tiled
+    # Menu uses the new name (SimpleFavoritesModel). Older Plasma (Debian 13 has 6.3) knows it
+    # only by its old name, and the menu would not load at all.
+    version = plasma_version()
+    if version and version < (6, 4):
+        qml = dest / "contents" / "ui" / "KickerAppModel.qml"
+        text = qml.read_text(encoding="utf-8")
+        if "Kicker.SimpleFavoritesModel {" in text:
+            qml.write_text(text.replace("Kicker.SimpleFavoritesModel {", "Kicker.FavoritesModel {"),
+                           encoding="utf-8")
+            print(f"Adapted Tiled Menu to Plasma {version[0]}.{version[1]}")
+        elif "Kicker.FavoritesModel {" not in text:
+            print("WARNING: Tiled Menu changed; check that it loads on this Plasma.", file=sys.stderr)
+    readable(dest)
+    print(f"Start menu (Tiled Menu) installed in {dest}")
+
+
+# ── icons ────────────────────────────────────────────────────────────────────
+def pictures(theme: Path, name: str):
+    """Every file or link called NAME.svg in the theme (all sizes)."""
+    return [Path(dp) / f"{name}.svg" for dp, _, files in os.walk(theme) if f"{name}.svg" in files]
+
+
+def remove_dangling_links(theme: Path) -> None:
+    while True:
+        dangling = [Path(dp) / f for dp, dirs, files in os.walk(theme) for f in files + dirs
+                    if (Path(dp) / f).is_symlink() and not (Path(dp) / f).exists()]
+        if not dangling:
+            return
+        for p in dangling:
+            p.unlink()
+
+
+def inside(theme: Path, path: Path) -> bool:
+    return str(path).startswith(str(theme.resolve()) + os.sep)
+
+
+def install_icons(source: Path, dest: Path) -> None:
+    src = source / "src"
+    if not (src / "index.theme").is_file() or "Name=We10X" not in (src / "index.theme").read_text():
+        fail(f"{source} does not contain the We10X icon theme")
+    if dest.is_symlink():
+        dest.unlink()
+    elif dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    for f in ("COPYING", "AUTHORS"):
+        shutil.copy2(source / f, dest / f)
+    shutil.copy2(src / "index.theme", dest / "index.theme")
+    for folder in ICON_FOLDERS:
+        copy_tree(src / folder, dest / folder)
+    for size in STATUS_SIZES:
+        copy_tree(src / "status" / size, dest / "status" / size)
+    for f in ("user-trash-dark.svg", "user-trash-full-dark.svg"):
+        (dest / "places" / "scalable" / f).unlink(missing_ok=True)
+    for folder in LINK_FOLDERS:
+        copy_tree(source / "links" / folder, dest / folder)
+    (dest / "preferences" / "22").symlink_to("32")
+
+    # File Explorer: the theme's other folder picture (the default one copies the icon of
+    # Microsoft's File Explorer).
+    shutil.copy2(source / "alternative" / "apps" / "scalable" / "file-manager.svg",
+                 dest / "apps" / "scalable" / "file-manager.svg")
+
+    theme = dest.resolve()
+    removed = 0
+    for name in MICROSOFT_LOGOS:
+        for p in pictures(theme, name):
+            real = p.resolve()
+            if inside(theme, real) and real.exists():
+                real.unlink()
+                removed += 1
+            if p.is_symlink() or p.exists():
+                p.unlink()
+    for picture, names in NEUTRAL.items():
+        for name in names:
+            for p in pictures(theme, name):
+                real = p.resolve()
+                if not inside(theme, real) or real.name == f"{picture}.svg":
+                    continue    # (already shows the neutral picture)
+                real.unlink(missing_ok=True)
+                if (real.parent / f"{picture}.svg").exists():
+                    real.symlink_to(f"{picture}.svg")
+    remove_dangling_links(theme)
+
+    # Scaled (HiDPI) folders point at the normal ones, as the theme's installer does it.
+    for folder in (*ICON_FOLDERS, "status"):
+        link = dest / f"{folder}@2x"
+        if not link.exists():
+            link.symlink_to(folder)
+    readable(dest)
+    if shutil.which("gtk-update-icon-cache"):
+        subprocess.run(["gtk-update-icon-cache", "-q", "-f", "-t", str(dest)], check=False)
+    print(f"Icons (We10X) installed in {dest}; {removed} pictures with Microsoft logos left out")
+
+
+# ── font ─────────────────────────────────────────────────────────────────────
+def install_font(source: Path, dest: Path) -> None:
+    fonts = sorted(p for p in source.rglob("*.ttf") if p.name.lower().startswith("selawk"))
+    licence = next(iter(sorted(source.rglob("LICENSE.txt"))), None)
+    if not fonts or licence is None:
+        fail(f"{source} does not contain the Selawik fonts and their licence")
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in fonts:
+        shutil.copy2(f, dest / f.name)
+    shutil.copy2(licence, dest / "LICENSE.txt")
+    readable(dest)
+    if shutil.which("fc-cache"):
+        subprocess.run(["fc-cache", "-f", str(dest)], check=False)
+    print(f"Font Selawik ({len(fonts)} styles) installed in {dest}")
+
+
+def main(argv) -> None:
+    jobs = {"menu": (install_menu, MENU_DEST), "icons": (install_icons, ICONS_DEST),
+            "font": (install_font, FONT_DEST)}
+    if len(argv) not in (2, 3) or argv[0] not in jobs:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+    job, default = jobs[argv[0]]
+    job(Path(argv[1]), Path(argv[2] if len(argv) == 3 else default))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

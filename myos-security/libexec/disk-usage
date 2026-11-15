@@ -1,0 +1,18 @@
+#!/bin/sh
+# Says how much disk space a file or folder really takes on a Btrfs drive, with
+# and without compression. Runs as root through pkexec, because only root may
+# ask the file system for that. It answers for the caller's own files only.
+#   disk-usage PATH
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+[ $# -eq 1 ] || { echo "usage: disk-usage PATH" >&2; exit 2; }
+case "${PKEXEC_UID:-}" in
+    ""|*[!0-9]*) echo "disk-usage: start it through pkexec." >&2; exit 2 ;;
+esac
+target=$(readlink -e -- "$1") || { echo "disk-usage: $1 does not exist." >&2; exit 2; }
+owner=$(stat -c %u -- "$target") || exit 2
+if [ "$owner" != "$PKEXEC_UID" ]; then
+    echo "disk-usage: $target does not belong to you." >&2
+    exit 3
+fi
+command -v compsize >/dev/null 2>&1 || { echo "disk-usage: compsize is not installed (package btrfs-compsize)." >&2; exit 4; }
+exec compsize -b -x -- "$target"

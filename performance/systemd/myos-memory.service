@@ -1,0 +1,13 @@
+[Unit]
+Description=Compressed memory, so that more apps fit into the RAM
+Documentation=https://docs.kernel.org/admin-guide/mm/zswap.html
+After=swap.target local-fs.target
+ConditionPathExists=/usr/libexec/myos/memory-setup
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/myos/memory-setup
+
+[Install]
+WantedBy=multi-user.target

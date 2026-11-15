@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Name": "Windows compatibility",
+        "Description": "Run Windows programs with Wine or Proton",
+        "MimeTypes": [
+            "application/x-ms-dos-executable",
+            "application/x-msdownload",
+            "application/vnd.microsoft.portable-executable",
+            "application/x-msi",
+            "application/x-ms-ne-executable"
+        ]
+    }
+}

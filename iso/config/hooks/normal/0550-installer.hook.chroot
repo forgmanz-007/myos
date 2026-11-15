@@ -1,0 +1,23 @@
+#!/bin/bash
+# Installer fix: on UEFI PCs Debian's installer helper installs only "grub-efi",
+# which is not signed for Secure Boot. New PCs ship with Secure Boot on, so the
+# installed system would not start. Also install the signed GRUB and shim
+# (they come from the repository on the USB stick, see bootloader-efi.list.binary).
+set -euo pipefail
+
+HELPER=/usr/share/calamares/helpers/calamares-bootloader-config
+WANT='apt-get -y install grub-efi grub-efi-amd64-signed shim-signed'
+
+if [ ! -f "$HELPER" ]; then
+    echo "The installer's bootloader helper is missing: $HELPER" >&2
+    exit 1
+fi
+if ! grep -qF "$WANT" "$HELPER"; then
+    sed -i -E 's/(apt-get -y install grub-efi)[[:space:]]*$/\1 grub-efi-amd64-signed shim-signed/' "$HELPER"
+fi
+if ! grep -qF "$WANT" "$HELPER"; then
+    echo "Could not add Secure Boot support to $HELPER (Debian changed the file)." >&2
+    echo "Without it, installed systems only start with Secure Boot switched off." >&2
+    exit 1
+fi
+echo "Installer installs the Secure Boot-signed GRUB and shim on UEFI PCs."

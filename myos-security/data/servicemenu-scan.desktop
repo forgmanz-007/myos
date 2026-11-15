@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/allfiles;inode/directory;
+Actions=scan;
+
+[Desktop Action scan]
+Name=Scan for viruses (ClamAV)
+Icon=security-high
+Exec=myos-scan %F

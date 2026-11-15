@@ -1,0 +1,12 @@
+{
+  "name": "weather",
+  "description": "Get the current weather for a city (uses the internet service wttr.in).",
+  "command": "curl -s --max-time 15 \"https://wttr.in/${CITY// /+}?format=3\"",
+  "parameters": [
+    {"name": "city", "type": "string", "description": "City name, e.g. London", "required": true}
+  ],
+  "ask_before_running": false,
+  "run_as_admin": false,
+  "timeout": 30,
+  "enabled": true
+}

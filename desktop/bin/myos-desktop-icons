@@ -1,0 +1,32 @@
+#!/bin/sh
+# Puts the Recycle Bin on the desktop, like Windows 10. Runs at every login but does that only
+# once per user: if you delete the icon, it stays deleted. (Not in /etc/skel, because the
+# desktop folder has a different name in other languages.)
+
+# Title bars: at login KWin (the window manager) starts with KDE's Breeze icons instead of
+# the chosen icon theme (seen with Plasma 6.3); asking programs to reload their icons fixes it.
+dbus-send --session --type=signal /KIconLoader org.kde.KIconLoader.iconChanged int32:0 2>/dev/null
+
+STATE=${XDG_STATE_HOME:-$HOME/.local/state}/myos
+[ -e "$STATE/desktop-icons" ] && exit 0
+
+xdg-user-dirs-update >/dev/null 2>&1    # makes sure the desktop folder exists and has its name
+DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null)
+if [ -z "$DESKTOP" ] || [ "$DESKTOP" = "$HOME" ]; then
+    DESKTOP=$HOME/Desktop
+fi
+mkdir -p "$DESKTOP" "$STATE" || exit 1
+
+BIN=$DESKTOP/recycle-bin.desktop
+if [ ! -e "$BIN" ]; then
+    cat > "$BIN" <<'ENTRY'
+[Desktop Entry]
+Type=Link
+Name=Recycle Bin
+Icon=user-trash-full
+EmptyIcon=user-trash
+URL=trash:/
+ENTRY
+    chmod 755 "$BIN"
+fi
+touch "$STATE/desktop-icons"

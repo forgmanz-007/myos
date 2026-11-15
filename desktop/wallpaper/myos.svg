@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <radialGradient id="bg" cx="0.62" cy="0.45" r="0.85">
+      <stop offset="0" stop-color="#1b5fd1"/>
+      <stop offset="0.45" stop-color="#0b2a66"/>
+      <stop offset="1" stop-color="#030a1c"/>
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9fd4ff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#9fd4ff" stop-opacity="0.35"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#bfe3ff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#bfe3ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <g fill="url(#ray)">
+    <polygon points="0,180 1190,470 1190,500"/>
+    <polygon points="0,520 1190,500 1190,530"/>
+    <polygon points="0,900 1190,530 1190,560"/>
+    <polygon points="200,1080 1190,560 1190,590"/>
+  </g>
+  <circle cx="1190" cy="515" r="260" fill="url(#glow)" opacity="0.35"/>
+  <path d="M1190 340 1341.5 427.5V602.5L1190 690 1038.5 602.5V427.5Z" fill="none" stroke="#d6ecff" stroke-opacity="0.85" stroke-width="10" stroke-linejoin="round"/>
+  <circle cx="1190" cy="515" r="52" fill="#e9f5ff" fill-opacity="0.95"/>
+</svg>

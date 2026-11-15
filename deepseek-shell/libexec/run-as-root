@@ -1,0 +1,36 @@
+#!/bin/bash
+# Runs ONE command as root for DeepSeek Shell. It is started through pkexec,
+# so the user has seen the command in DeepSeek Shell, allowed it, and typed
+# their password in the system's password dialog.
+#   run-as-root [--timeout SECONDS] [--snapshot TEXT] -- COMMAND
+set -u
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 TERM=dumb PAGER=cat SYSTEMD_PAGER='' NO_COLOR=1
+export EDITOR=false VISUAL=false GIT_EDITOR=false SUDO_EDITOR=false  # no keyboard: never wait in an editor
+
+limit=900
+snapshot=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --timeout)  limit=$2; shift 2 ;;
+        --snapshot) snapshot=$2; shift 2 ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+if [ $# -ne 1 ]; then
+    echo "usage: run-as-root [--timeout SECONDS] [--snapshot TEXT] -- COMMAND" >&2
+    exit 2
+fi
+case "$limit" in ''|*[!0-9]*) limit=900 ;; esac
+
+# Snapshot first, so the change can be undone (Btrfs + snapper only).
+if [ -n "$snapshot" ] && command -v snapper >/dev/null 2>&1 \
+   && snapper -c root get-config >/dev/null 2>&1; then
+    if n=$(snapper -c root create --cleanup-algorithm number --print-number \
+            --description "DeepSeek Shell: ${snapshot:0:150}" 2>/dev/null); then
+        echo "[Snapshot #$n saved before this change. Undo with: snapper -c root undochange $n..0]"
+    fi
+fi
+
+exec timeout --kill-after=15 "$limit" /bin/bash -c "$1"

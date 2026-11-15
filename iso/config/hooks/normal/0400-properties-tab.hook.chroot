@@ -1,0 +1,29 @@
+#!/bin/bash
+# Compile the "Windows compatibility" tab of the file Properties dialog
+# (Proton on/off for .exe files). If it fails the build continues, because the
+# right-click menu of .exe files offers the same settings.
+set -uo pipefail
+SRC=/usr/src/myos-compat-tab
+[ -d "$SRC" ] || exit 0
+export DEBIAN_FRONTEND=noninteractive
+
+before=$(mktemp); after=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort -u > "$before"
+
+if apt-get install -y -q --no-install-recommends \
+        cmake make g++ extra-cmake-modules qt6-base-dev libkf6kio-dev libkf6coreaddons-dev \
+   && cmake -S "$SRC" -B /tmp/compat-build -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
+   && cmake --build /tmp/compat-build -j"$(nproc)" \
+   && cmake --install /tmp/compat-build; then
+    echo "Properties tab installed."
+else
+    echo "WARNING: the Properties tab could not be built; use right-click > Windows program instead."
+fi
+
+# Remove the compiler and headers again.
+dpkg-query -W -f='${Package}\n' | sort -u > "$after"
+new=$(comm -13 "$before" "$after" | tr '\n' ' ')
+if [ -n "${new// /}" ]; then apt-get purge -y -q $new; fi
+rm -rf /tmp/compat-build "$SRC" "$before" "$after"
+exit 0

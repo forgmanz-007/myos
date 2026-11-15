@@ -1,0 +1,39 @@
+# Base system, hardware support, and the tools the AI uses to diagnose problems.
+sudo
+pkexec
+network-manager
+wpasupplicant
+bluez
+intel-microcode
+amd64-microcode
+fwupd
+curl
+wget
+ca-certificates
+gnupg
+zstd
+unzip
+pciutils
+usbutils
+lshw
+inxi
+dmidecode
+mesa-utils
+vulkan-tools
+mokutil
+efibootmgr
+btrfs-progs
+# Measures what compressed programs really take on the disk (myos-compress)
+btrfs-compsize
+snapper
+dosfstools
+ntfs-3g
+exfatprogs
+flatpak
+bash-completion
+locales
+console-setup
+keyboard-configuration
+# DeepSeek Shell runtime
+python3
+python3-pyqt6

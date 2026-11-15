@@ -1,0 +1,10 @@
+[Unit]
+Description=Look every 5 minutes whether the idle virus scanner should give back its memory
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=5min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

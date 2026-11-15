@@ -1,0 +1,12 @@
+{
+  "name": "scan_for_viruses",
+  "description": "Scan a file or folder for viruses with ClamAV (and VirusTotal / ANY.RUN for single files when API keys are set up in ClamAV Security).",
+  "command": "myos-scan --cli {path}",
+  "parameters": [
+    {"name": "path", "type": "string", "description": "File or folder to scan, e.g. ~/Downloads", "required": true}
+  ],
+  "ask_before_running": false,
+  "run_as_admin": false,
+  "timeout": 1800,
+  "enabled": true
+}

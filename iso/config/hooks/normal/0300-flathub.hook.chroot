@@ -1,0 +1,4 @@
+#!/bin/bash
+# Flathub app store, so the AI (or you) can install desktop apps with one command.
+set -euo pipefail
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

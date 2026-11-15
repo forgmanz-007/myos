@@ -1,0 +1,5 @@
+# Plasma's own "Memory Shortage Avoided" notice came two or three times for one
+# closed app. /usr/libexec/myos/app-closed says it once instead.
+# (Plasma 6 still reads its background modules' settings from kded5rc, not kded6rc.)
+[Module-oom-notifier]
+autoload=false
