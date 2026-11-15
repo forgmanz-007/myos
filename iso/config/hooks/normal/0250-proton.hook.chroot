@@ -16,7 +16,7 @@ release_json() {  # <owner/repo> <latest | tags/NAME>
 }
 asset_urls() {    # <json> <regex for the file name>
     printf '%s' "$1" | grep -oE '"browser_download_url": *"[^"]+"' \
-        | sed -E 's/.*"(https[^"]+)"$/\1/' | grep -E "$2" || true
+        | sed -E 's/.*"(https[^"]+)"$/\1/' | grep -E -e "$2" || true
 }
 
 # umu-launcher: .deb packages built for Debian 13
@@ -36,19 +36,34 @@ if [ "$BUNDLE_PROTON" = yes ]; then
     else
         ge=$(release_json GloriousEggroll/proton-ge-custom latest)
     fi
-    tar_url=$(asset_urls "$ge" '\.tar\.gz$' | head -n1)
-    sum_url=$(asset_urls "$ge" '\.sha512sum$' | head -n1)
-    [ -n "$tar_url" ] || { echo "No GE-Proton download found." >&2; exit 1; }
-    name=$(basename "$tar_url" .tar.gz)
-    echo "Downloading $name"
+    # The build for PCs: GE-Proton publishes "-x86_64" and "-aarch64" files (older releases had
+    # one file without a suffix). Never an ARM build.
+    tar_url=$(asset_urls "$ge" '-x86_64\.tar\.gz$' | head -n1)
+    if [ -z "$tar_url" ]; then
+        tar_url=$(asset_urls "$ge" '\.tar\.gz$' | grep -v -i -e aarch64 -e arm64 | head -n1 || true)
+    fi
+    [ -n "$tar_url" ] || { echo "No GE-Proton download for x86_64 PCs found." >&2; exit 1; }
+    base=$(basename "$tar_url" .tar.gz)
+    sum_url=$(asset_urls "$ge" "/$base\\.sha512sum\$" | head -n1)
+    echo "Downloading $base"
     curl -fSL --retry 3 -o "$TMP/proton.tar.gz" "$tar_url"
     if [ -n "$sum_url" ]; then
         want=$(curl -fsSL --retry 3 "$sum_url" | awk '{print $1}')
         have=$(sha512sum "$TMP/proton.tar.gz" | awk '{print $1}')
         if [ "$want" != "$have" ]; then echo "GE-Proton checksum mismatch." >&2; exit 1; fi
     fi
+    # The folder inside the download is the name the .exe launcher uses (.builtin).
+    mkdir "$TMP/unpacked"
+    tar -xzf "$TMP/proton.tar.gz" -C "$TMP/unpacked"
+    rm -f "$TMP/proton.tar.gz"
+    name=$(ls "$TMP/unpacked")
+    if [ "$(printf '%s\n' "$name" | wc -l)" -ne 1 ] || [ ! -x "$TMP/unpacked/$name/proton" ]; then
+        echo "The GE-Proton download is not laid out as expected." >&2
+        exit 1
+    fi
     install -d /usr/share/steam/compatibilitytools.d
-    tar -xzf "$TMP/proton.tar.gz" -C /usr/share/steam/compatibilitytools.d
-    test -x "/usr/share/steam/compatibilitytools.d/$name/proton"
+    rm -rf "/usr/share/steam/compatibilitytools.d/$name"
+    mv "$TMP/unpacked/$name" /usr/share/steam/compatibilitytools.d/
     echo "$name" > /usr/share/steam/compatibilitytools.d/.builtin
+    echo "GE-Proton installed: $name"
 fi
