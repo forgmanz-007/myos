@@ -66,6 +66,9 @@ KDE's own look, and **Windows 10 Style** back.
   - 254 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
     speed and memory 33) on Qt 6.8.2, the version in Debian 13. All 46 shell scripts pass
     shellcheck without warnings.
+  - **The ISO builds**: on GitHub (Actions → Build ISO) in 20 minutes, 5.7 GiB, with the Linux 7.2
+    kernel from backports, GE-Proton 11-12 for x86_64, Firefox, Ollama, ClamAV signatures, the
+    Properties tab and the whole Windows 10 look (all build steps reported success).
   - **On a real Debian 13 + KDE Plasma 6.3 system** (a test virtual machine), installed with this
     project's own install scripts and build hooks, and checked for real:
     - the taskbar and Start menu, File Explorer, and the AI Assistant page in Settings;
@@ -170,11 +173,12 @@ KDE's own look, and **Windows 10 Style** back.
     first one); menus placed in a toolbar opened only from their small arrow (now they are in
     the menu bar, which Dolphin hides on a first start unless told otherwise); the Refresh
     button's name was wrong (checked against the 132 action names of the real app now); and KDE
-    added an untitled menu for "Show Toolbar" (it now goes into View).
+    added an untitled menu for "Show Toolbar" (it now goes into View). The first ISO builds found
+    3 more: the backports kernel (Linux 7.2) also needs the newer linux-base from backports; the
+    ISO step needs apt-utils on the build machine; and GE-Proton now publishes separate x86_64 and
+    ARM downloads, and the ARM one was taken (now always the x86_64 one, checked by its checksum).
   - **Not tested yet:**
-    - building the ISO itself and installing it on a PC (installer, Secure Boot, the 2-second
-      boot menu); the Windows 10 look's build step ran on the test machine, not yet inside a
-      full ISO build;
+    - booting and installing the ISO on a PC (installer, Secure Boot, the 2-second boot menu);
     - NVIDIA/AMD graphics cards, including Task Manager's graphics card page and the effects
       switching back on once a driver is in use (only the "no driver" case could be tried);
     - Task Manager's Wi-Fi details (the test machine has a wired network only);
