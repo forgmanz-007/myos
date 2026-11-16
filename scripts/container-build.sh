@@ -129,6 +129,14 @@ echo "$MYOS_VERSION" > "$INC/etc/myos/version"
 # The hooks below download and compile some parts; note that this version has them.
 bash "$SRC/updates/apply.sh" --seed --destdir "$INC"
 
+# GitHub's API answers anonymous requests only 60 times an hour per address, and GitHub's
+# build machines share addresses: there, hooks 0250 and 0450 use the build's own token. It
+# is short-lived, and hook 0990-cleanup removes it before the image is packed.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    install -d -m 700 "$INC/var/lib/myos-build"
+    (umask 077; printf '%s\n' "$GITHUB_TOKEN" > "$INC/var/lib/myos-build/github-token")
+fi
+
 install -d "$INC/etc/deepseek-shell"
 cat > "$INC/etc/deepseek-shell/defaults.json" <<EOF
 {

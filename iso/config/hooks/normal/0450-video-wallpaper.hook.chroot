@@ -17,7 +17,12 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 if [ -n "$VIDEO_WALLPAPER_VERSION" ]; then release="tags/$VIDEO_WALLPAPER_VERSION"; else release=latest; fi
-json=$(curl -fsSL --retry 5 --retry-delay 10 -H "Accept: application/vnd.github+json" \
+# The ISO build's own GitHub token, when it runs on GitHub (see 0250-proton).
+auth=()
+if [ -s /var/lib/myos-build/github-token ]; then
+    auth=(-H "Authorization: Bearer $(cat /var/lib/myos-build/github-token)")
+fi
+json=$(curl -fsSL --retry 5 --retry-delay 10 "${auth[@]}" -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/$REPO/releases/$release")
 url=$(printf '%s' "$json" | grep -oE '"browser_download_url": *"[^"]+\.tar\.gz"' \
     | sed -E 's/.*"(https[^"]+)"$/\1/' | head -n1)

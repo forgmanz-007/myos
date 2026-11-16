@@ -52,6 +52,10 @@ jobs:
           df -h /
 
       - name: Build the ISO
+        env:
+          # For the build hooks' GitHub API lookups (anonymous ones are limited per address,
+          # and build machines share addresses). Never stored in the ISO.
+          GITHUB_TOKEN: ${{ github.token }}
         run: ./build.sh
 
       - name: Upload the ISO

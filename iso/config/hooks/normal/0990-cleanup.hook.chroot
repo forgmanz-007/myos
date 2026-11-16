@@ -1,4 +1,6 @@
 #!/bin/bash
 set -e
+# The build's GitHub token (see 0250-proton) never goes into the image.
+rm -rf /var/lib/myos-build
 apt-get clean
 rm -rf /root/.gnupg /tmp/* /var/tmp/* 2>/dev/null || true

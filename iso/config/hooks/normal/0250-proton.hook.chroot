@@ -10,8 +10,14 @@ export DEBIAN_FRONTEND=noninteractive
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# GitHub's API answers anonymous requests only 60 times an hour per address, and build
+# machines share addresses: the ISO build leaves its own short-lived token in this file
+# (only on GitHub's build machines; 0990-cleanup removes it before the image is packed).
+TOKEN_FILE=/var/lib/myos-build/github-token
 release_json() {  # <owner/repo> <latest | tags/NAME>
-    curl -fsSL --retry 5 --retry-delay 10 -H "Accept: application/vnd.github+json" \
+    local auth=()
+    if [ -s "$TOKEN_FILE" ]; then auth=(-H "Authorization: Bearer $(cat "$TOKEN_FILE")"); fi
+    curl -fsSL --retry 5 --retry-delay 10 "${auth[@]}" -H "Accept: application/vnd.github+json" \
         "https://api.github.com/repos/$1/releases/$2"
 }
 asset_urls() {    # <json> <regex for the file name>

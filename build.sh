@@ -52,7 +52,7 @@ if [ "$MODE" = native ]; then
     [ -r /etc/debian_version ] || die "--native only works on Debian. Use ./build.sh (container) instead."
     if [ "$(id -u)" -ne 0 ]; then
         say "Native build needs root, asking sudo..."
-        exec sudo --preserve-env=HOME bash "$HERE/build.sh" --native
+        exec sudo --preserve-env=HOME,GITHUB_TOKEN bash "$HERE/build.sh" --native
     fi
     exec bash "$HERE/scripts/container-build.sh" "$HERE" "$HERE/out" "/var/tmp/${OS_ID}-build"
 fi
@@ -67,8 +67,13 @@ case "$(uname -m)" in
         PLATFORM_ARGS=(--platform linux/amd64) ;;
 esac
 
+# A GitHub token, if set (GitHub's own build sets one): GitHub's API limits anonymous
+# downloads of release information per address.
+ENV_ARGS=()
+if [ -n "${GITHUB_TOKEN:-}" ]; then ENV_ARGS=(-e GITHUB_TOKEN); fi
+
 say "Building ${OS_NAME} with ${ENGINE}. This takes 20-60 minutes and needs about 25 GB of free disk space."
-"$ENGINE" run --rm --privileged "${PLATFORM_ARGS[@]}" \
+"$ENGINE" run --rm --privileged "${PLATFORM_ARGS[@]}" "${ENV_ARGS[@]}" \
     -v "$HERE":/src:ro \
     -v "$HERE/out":/out \
     -v "${OS_ID}-build-cache":/work/cache \

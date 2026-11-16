@@ -563,6 +563,23 @@ class Build(unittest.TestCase):
         self.assertIn('gh release create "v$VERSION"', flow)
         self.assertIn("contents: write", flow)
 
+    def test_builds_token_is_used_for_githubs_api_only_and_never_kept(self):
+        hooks = PROJECT / "iso/config/hooks/normal"
+        build = (PROJECT / "scripts/container-build.sh").read_text()
+        self.assertIn("""(umask 077; printf '%s\\n' "$GITHUB_TOKEN" > "$INC/var/lib/myos-build/github-token")""", build)
+        self.assertIn("\nrm -rf /var/lib/myos-build\n", (hooks / "0990-cleanup.hook.chroot").read_text())
+        for hook in sorted(hooks.glob("*.hook.chroot")):
+            for line in hook.read_text().splitlines():
+                if "Authorization" in line:      # only ever sent to api.github.com
+                    self.assertIn(hook.name, ("0250-proton.hook.chroot", "0450-video-wallpaper.hook.chroot"))
+                    self.assertIn("auth=(-H \"Authorization: Bearer $(cat ", line)
+            text = hook.read_text()
+            for call in re.findall(r'curl [^\n]*"\$\{auth\[@\]\}"[^\n]*\n[^\n]*', text):
+                self.assertIn("https://api.github.com/", call, hook.name)
+        self.assertIn('ENV_ARGS=(-e GITHUB_TOKEN)', (PROJECT / "build.sh").read_text())
+        self.assertIn("--preserve-env=HOME,GITHUB_TOKEN", (PROJECT / "build.sh").read_text())
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", (PROJECT / ".github/workflows/build-iso.yml").read_text())
+
     def test_installer(self):
         s = (HERE / "install.sh").read_text()
         for wanted in ('"$HERE/bin/myos-update" "$DESTDIR/usr/bin/myos-update"',
