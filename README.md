@@ -64,12 +64,19 @@ KDE's own look, and **Windows 10 Style** back.
   Enter keys in ClamAV Security → Windows programs. Only a file's fingerprint is sent, unless you
   choose to upload the file.
 - **Tested so far:**
-  - 282 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
-    speed and memory 33, updates 28) on Qt 6.8.2, the version in Debian 13. All 48 shell scripts
+  - 283 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
+    speed and memory 33, updates 29) on Qt 6.8.2, the version in Debian 13. All 48 shell scripts
     pass shellcheck without warnings. GitHub runs them before every build.
   - **The ISO builds**: on GitHub (Actions → Build ISO) in 20 minutes, 5.7 GiB, with the Linux 7.2
     kernel from backports, GE-Proton 11-12 for x86_64, Firefox, Ollama, ClamAV signatures, the
     Properties tab and the whole Windows 10 look (all build steps reported success).
+  - **Automatic updates**: a push to GitHub tested, built (23 minutes) and published release
+    2026.11.16-6 by itself. In the test virtual machine the updater first installed a version
+    from a local copy (2 minutes: all six parts, the Properties tab compiled again and the
+    compiler removed again, the Start menu, icons and video wallpaper plugin downloaded again,
+    the desktop kept running), then that real release from GitHub through its timer's service
+    (6 seconds; only the one part whose files had changed was downloaded again). Each time one
+    quiet entry arrived in the notification history.
   - **On a real Debian 13 + KDE Plasma 6.3 system** (a test virtual machine), installed with this
     project's own install scripts and build hooks, and checked for real:
     - the taskbar and Start menu, File Explorer, and the AI Assistant page in Settings;
@@ -178,8 +185,13 @@ KDE's own look, and **Windows 10 Style** back.
     3 more: the backports kernel (Linux 7.2) also needs the newer linux-base from backports; the
     ISO step needs apt-utils on the build machine; and GE-Proton now publishes separate x86_64 and
     ARM downloads, and the ARM one was taken (now always the x86_64 one, checked by its checksum).
+    The first automatic build was refused by GitHub's API (its hourly limit for anonymous
+    requests, which GitHub's build machines share), so the build now uses its own short-lived
+    token, which never goes into the ISO.
   - **Not tested yet:**
     - booting and installing the ISO on a PC (installer, Secure Boot, the 2-second boot menu);
+    - an automatic update on a PC installed from the ISO, including the snapshot taken first
+      (the test machine has no Btrfs);
     - NVIDIA/AMD graphics cards, including Task Manager's graphics card page and the effects
       switching back on once a driver is in use (only the "no driver" case could be tried);
     - Task Manager's Wi-Fi details (the test machine has a wired network only);
