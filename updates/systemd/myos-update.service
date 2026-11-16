@@ -1,0 +1,19 @@
+[Unit]
+Description=Install new MyOS versions from GitHub
+Documentation=file:/usr/bin/myos-update
+After=network-online.target
+Wants=network-online.target
+# Only on installed systems (not in the USB stick's live session), and not on battery.
+ConditionKernelCommandLine=!boot=live
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/myos-update --auto
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# A shutdown waits for an update that is being installed (seconds, rarely minutes), so
+# no half-installed update is left behind; a download in progress stops at once.
+KillMode=mixed
+TimeoutStopSec=20min

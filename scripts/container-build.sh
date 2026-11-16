@@ -31,6 +31,16 @@ for v in FILE_MANAGER BUNDLE_PROTON CLAMAV_SIGNATURES VIDEO_WALLPAPERS; do
 done
 [[ "$PROTON_VERSION" =~ ^[A-Za-z0-9._-]*$ ]] || die "PROTON_VERSION contains invalid characters."
 [[ "$VIDEO_WALLPAPER_VERSION" =~ ^[A-Za-z0-9._-]*$ ]] || die "VIDEO_WALLPAPER_VERSION contains invalid characters."
+UPDATE_REPO=${UPDATE_REPO-}
+[[ "$UPDATE_REPO" =~ ^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?$ ]] || die "UPDATE_REPO must look like owner/name (or be empty)."
+# The version: written by GitHub's build (date and run number, like 2026.11.16-7). Builds
+# elsewhere are "local" and take the newest version from UPDATE_REPO at the first update.
+# (Not called VERSION: /etc/os-release, read below, sets that.)
+MYOS_VERSION=local
+if [ -f "$SRC/VERSION" ]; then
+    MYOS_VERSION=$(tr -d '[:space:]' < "$SRC/VERSION")
+    [[ "$MYOS_VERSION" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}-[0-9]+$ ]] || die "The VERSION file must look like 2026.11.16-7 (got '$MYOS_VERSION')."
+fi
 if [ "$BUNDLE_MODEL" = yes ] && [ -z "$DEFAULT_MODEL" ]; then
     DEFAULT_MODEL="deepseek-r1:8b"
 fi
@@ -76,6 +86,8 @@ log "Adding Task Manager"
 bash "$SRC/task-manager/install.sh" --destdir "$INC" --prefix /usr
 log "Adding the Windows 10-style desktop"
 bash "$SRC/desktop/install.sh" --destdir "$INC" --os-name "$OS_NAME"
+log "Adding automatic updates (version $MYOS_VERSION)"
+bash "$SRC/updates/install.sh" --destdir "$INC"
 
 # Settings read by auto/config (live-build) ...
 {
@@ -104,6 +116,18 @@ install -d "$INC/etc/myos"
     echo "VIDEO_WALLPAPERS=$(shq "$VIDEO_WALLPAPERS")"
     echo "VIDEO_WALLPAPER_VERSION=$(shq "$VIDEO_WALLPAPER_VERSION")"
 } > "$INC/etc/myos/build.conf"
+
+# ... and by the updater (updates/bin/myos-update).
+echo "$MYOS_VERSION" > "$INC/etc/myos/version"
+{
+    echo "# Automatic updates of $OS_NAME (see: myos-update --help)."
+    echo "# REPO: the GitHub repository whose releases are installed (empty = no updates)."
+    echo "REPO=$(shq "$UPDATE_REPO")"
+    echo "# AUTO=no stops the automatic installs; \"sudo myos-update\" still works."
+    echo "AUTO='yes'"
+} > "$INC/etc/myos/update.conf"
+# The hooks below download and compile some parts; note that this version has them.
+bash "$SRC/updates/apply.sh" --seed --destdir "$INC"
 
 install -d "$INC/etc/deepseek-shell"
 cat > "$INC/etc/deepseek-shell/defaults.json" <<EOF
@@ -137,7 +161,7 @@ lb build 2>&1 | tee "$OUT/build.log"
 
 ISO=$(find "$WORK" -maxdepth 1 -name '*.iso' | head -n1)
 [ -n "$ISO" ] || die "live-build finished without producing an ISO. See $OUT/build.log"
-DEST="$OUT/${OS_ID}-$(date +%Y%m%d)-amd64.iso"
+if [ "$MYOS_VERSION" = local ]; then DEST="$OUT/${OS_ID}-$(date +%Y%m%d)-amd64.iso"; else DEST="$OUT/${OS_ID}-${MYOS_VERSION}-amd64.iso"; fi
 mv -f "$ISO" "$DEST"
 (cd "$OUT" && sha256sum "$(basename "$DEST")" > "$(basename "$DEST").sha256")
 # Give the files to whoever owns the output folder (not root).

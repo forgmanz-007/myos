@@ -1,0 +1,10 @@
+[Unit]
+Description=Look for new MyOS versions every few hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

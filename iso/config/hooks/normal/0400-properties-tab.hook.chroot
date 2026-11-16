@@ -10,7 +10,9 @@ export DEBIAN_FRONTEND=noninteractive
 before=$(mktemp); after=$(mktemp)
 dpkg-query -W -f='${Package}\n' | sort -u > "$before"
 
-if apt-get install -y -q --no-install-recommends \
+# (Also run by updates/apply.sh when this source changed: then another program may be
+# installing packages, so wait for it.)
+if apt-get install -y -q -o DPkg::Lock::Timeout=600 --no-install-recommends \
         cmake make g++ extra-cmake-modules qt6-base-dev libkf6kio-dev libkf6coreaddons-dev \
    && cmake -S "$SRC" -B /tmp/compat-build -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
@@ -24,6 +26,6 @@ fi
 # Remove the compiler and headers again.
 dpkg-query -W -f='${Package}\n' | sort -u > "$after"
 new=$(comm -13 "$before" "$after" | tr '\n' ' ')
-if [ -n "${new// /}" ]; then apt-get purge -y -q $new; fi
+if [ -n "${new// /}" ]; then apt-get purge -y -q -o DPkg::Lock::Timeout=600 $new; fi
 rm -rf /tmp/compat-build "$SRC" "$before" "$after"
 exit 0

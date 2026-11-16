@@ -1,0 +1,431 @@
+#!/usr/bin/python3 -P
+"""Installs new versions of MyOS from GitHub.
+
+Every MyOS version that GitHub builds successfully is published as a release of the MyOS
+repository (set in /etc/myos/update.conf), together with an update package: the whole
+project at that version. This program looks for a release newer than the installed version
+(/etc/myos/version), downloads its package, checks it, takes a snapshot when the system
+disk can (snapper), and runs the package's updates/apply.sh, which installs that version's
+apps, settings and look onto this computer.
+
+  myos-update            look for a new version and install it now (as admin)
+  myos-update --check    only say whether a new version is out
+  myos-update --status   the installed version and how the last check went
+  myos-update --auto     what the timer runs every few hours: the same as the first, unless
+                         AUTO=no is set in /etc/myos/update.conf
+"""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import pwd
+import re
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import tarfile
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+# Everything lives below ROOT; the tests point it (and API) somewhere else.
+ROOT = Path(os.environ.get("MYOS_UPDATE_ROOT") or "/")
+CONF = ROOT / "etc/myos/update.conf"
+BUILD_CONF = ROOT / "etc/myos/build.conf"
+VERSION_FILE = ROOT / "etc/myos/version"
+STATE = ROOT / "var/lib/myos/update"
+CACHE = ROOT / "var/cache/myos-update"
+API = (os.environ.get("MYOS_UPDATE_API") or "https://api.github.com").rstrip("/")
+
+PACKAGE = "myos-update.tar.gz"
+MAX_PACKAGE = 300 * 1024 * 1024
+# A version that failed to install is tried again after this long (a newer one at once).
+RETRY_FAILED_AFTER = 24 * 3600
+# Versions are the date of the build and GitHub's run number: v2026.11.16-7.
+VERSION_RE = re.compile(r"^v?(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d{1,9})$")
+REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+class UpdateError(Exception):
+    pass
+
+
+def say(*args):
+    print(*args, flush=True)
+
+
+def read_conf(path: Path) -> dict:
+    """KEY=value lines as written by the ISO build (values may be quoted)."""
+    values = {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return values
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, raw = line.partition("=")
+        try:
+            words = shlex.split(raw, comments=True)
+        except ValueError:
+            continue
+        values[key.strip()] = words[0] if words else ""
+    return values
+
+
+def version_key(text):
+    """(year, month, day, build) for a version or tag, None if it is not one."""
+    m = VERSION_RE.match((text or "").strip())
+    return tuple(int(g) for g in m.groups()) if m else None
+
+
+def installed_version() -> str:
+    try:
+        return VERSION_FILE.read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def os_name() -> str:
+    return read_conf(BUILD_CONF).get("OS_NAME") or "MyOS"
+
+
+def load_status() -> dict:
+    try:
+        data = json.loads((STATE / "status.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_status(**fields):
+    status = load_status()
+    status.update(fields)
+    STATE.mkdir(parents=True, exist_ok=True)
+    tmp = STATE / "status.json.new"
+    tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, STATE / "status.json")
+
+
+def fetch(url: str, limit: int, dest: Path = None, accept="application/vnd.github+json"):
+    """The body of url (at most limit bytes), or its SHA-256 after saving it to dest."""
+    request = urllib.request.Request(url, headers={"User-Agent": "myos-update", "Accept": accept})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            if dest is None:
+                data = response.read(limit + 1)
+                if len(data) > limit:
+                    raise UpdateError(f"unexpectedly big answer from {url}")
+                return data
+            digest, size = hashlib.sha256(), 0
+            with open(dest, "wb") as out:
+                while chunk := response.read(1 << 16):
+                    size += len(chunk)
+                    if size > limit:
+                        raise UpdateError("the update package is unexpectedly big")
+                    digest.update(chunk)
+                    out.write(chunk)
+            return digest.hexdigest()
+    except urllib.error.HTTPError as e:
+        if e.code == 404 and dest is None and "/releases" in url:
+            raise UpdateError("the update repository was not found on GitHub") from e
+        if e.code in (403, 429):
+            raise UpdateError("GitHub is limiting requests right now; trying again later") from e
+        raise UpdateError(f"GitHub answered with error {e.code}") from e
+    except (urllib.error.URLError, OSError) as e:
+        raise UpdateError(f"no connection to GitHub ({getattr(e, 'reason', e)})") from e
+
+
+def newest_release(repo: str):
+    """The newest published version that has an update package, or None."""
+    try:
+        releases = json.loads(fetch(f"{API}/repos/{repo}/releases?per_page=30", 4 * 1024 * 1024))
+    except ValueError as e:
+        raise UpdateError("GitHub's answer could not be read") from e
+    best = None
+    for release in releases if isinstance(releases, list) else []:
+        if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+            continue
+        tag = str(release.get("tag_name") or "")
+        key = version_key(tag)
+        if key is None:
+            continue
+        assets = {a.get("name"): a for a in release.get("assets") or [] if isinstance(a, dict)}
+        package, sums = assets.get(PACKAGE), assets.get(PACKAGE + ".sha256")
+        if not package or not sums:
+            continue                      # still being uploaded, or not an update
+        if best is None or key > best["key"]:
+            best = {"key": key, "version": tag.lstrip("v"), "package": package, "sums": sums,
+                    "page": str(release.get("html_url") or "")}
+    return best
+
+
+def asset_url(asset: dict, repo: str) -> str:
+    url = str(asset.get("browser_download_url") or "")
+    allowed = [f"https://github.com/{repo}/releases/download/"]
+    if os.environ.get("MYOS_UPDATE_API"):
+        allowed.append(API + "/")
+    if not any(url.startswith(prefix) for prefix in allowed):
+        raise UpdateError(f"unexpected download address: {url or 'none'}")
+    return url
+
+
+def download(release: dict, repo: str, workdir: Path) -> Path:
+    """Downloads the update package and checks it against its published checksum."""
+    sums = fetch(asset_url(release["sums"], repo), 4096, accept="application/octet-stream")
+    m = re.match(rb"\s*([0-9a-fA-F]{64})\b", sums)
+    if not m:
+        raise UpdateError("the checksum file of the update could not be read")
+    wanted = m.group(1).decode().lower()
+    digest = str(release["package"].get("digest") or "")
+    if digest.startswith("sha256:") and digest[7:].lower() != wanted:
+        raise UpdateError("GitHub's checksum and the update's checksum file disagree")
+    path = workdir / PACKAGE
+    got = fetch(asset_url(release["package"], repo), MAX_PACKAGE, dest=path,
+                accept="application/octet-stream")
+    if got != wanted:
+        raise UpdateError("the downloaded update is damaged (its checksum does not match)")
+    return path
+
+
+def unpack(path: Path, workdir: Path, version: str) -> Path:
+    dest = workdir / "unpacked"
+    dest.mkdir()
+    try:
+        with tarfile.open(path, "r:gz") as tar:
+            # "data": nothing outside dest, no device files, no setuid bits.
+            tar.extractall(dest, filter="data")
+    except (tarfile.TarError, OSError) as e:
+        raise UpdateError(f"the update package could not be unpacked ({e})") from e
+    tops = list(dest.iterdir())
+    if len(tops) != 1 or not (tops[0] / "updates/apply.sh").is_file():
+        raise UpdateError("the update package does not contain updates/apply.sh")
+    tree = tops[0]
+    try:
+        inside = (tree / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        inside = ""
+    if inside != version:
+        raise UpdateError(f"the update package is version {inside or 'unknown'}, not {version}")
+    return tree
+
+
+def snapshot(version: str) -> bool:
+    """A system snapshot to go back to (Btrfs with snapper only)."""
+    if not shutil.which("snapper"):
+        return False
+    try:
+        r = subprocess.run(["snapper", "--no-dbus", "-c", "root", "create", "--cleanup-algorithm", "number",
+                            "--description", f"Before {os_name()} update {version}"],
+                           capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
+
+
+class ShutdownWaits:
+    """While an update is being installed, a shutdown (SIGTERM from systemd) waits for it to
+    finish instead of leaving a half-installed update behind. Installing takes seconds."""
+
+    def __enter__(self):
+        self.asked = False
+        self.old = signal.signal(signal.SIGTERM, self._later)
+        return self
+
+    def _later(self, *_):
+        self.asked = True
+
+    def __exit__(self, *exc):
+        signal.signal(signal.SIGTERM, self.old)
+        return False
+
+
+def apply(tree: Path, version: str) -> int:
+    env = dict(os.environ, MYOS_VERSION=version, DEBIAN_FRONTEND="noninteractive")
+    command = ["bash", str(tree / "updates/apply.sh")]
+    if ROOT != Path("/"):
+        command += ["--destdir", str(ROOT)]
+    return subprocess.run(command, cwd=tree, env=env).returncode
+
+
+def set_version(version: str):
+    VERSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = VERSION_FILE.with_name("version.new")
+    tmp.write_text(version + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, VERSION_FILE)
+
+
+def notify(title: str, body: str):
+    """A quiet note for everyone signed in: low urgency, so Plasma puts it in the
+    notification history without a pop-up."""
+    if ROOT != Path("/") or os.geteuid() != 0 or not shutil.which("notify-send"):
+        return
+    for bus in sorted(Path("/run/user").glob("*/bus")):
+        try:
+            uid = int(bus.parent.name)
+            user = pwd.getpwuid(uid).pw_name
+        except (ValueError, KeyError):
+            continue
+        if uid < 1000:
+            continue
+        try:
+            subprocess.run(["runuser", "-u", user, "--", "env", f"DBUS_SESSION_BUS_ADDRESS=unix:path={bus}",
+                            "notify-send", "--urgency=low", f"--app-name={os_name()} Update",
+                            "--icon=system-software-update", title, body],
+                           capture_output=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def take_lock():
+    STATE.mkdir(parents=True, exist_ok=True)
+    fd = os.open(STATE / "lock", os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def repo_from(conf: dict) -> str:
+    repo = conf.get("REPO", "").strip()
+    if repo and not REPO_RE.match(repo):
+        raise UpdateError(f"REPO in {CONF} is not a GitHub repository name (owner/name): {repo}")
+    return repo
+
+
+def check() -> int:
+    try:
+        repo = repo_from(read_conf(CONF))
+        if not repo:
+            say(f"Automatic updates are not set up (no REPO in {CONF}).")
+            return 0
+        installed = installed_version()
+        release = newest_release(repo)
+    except UpdateError as e:
+        say(f"Could not look for updates: {e}.")
+        return 1
+    if release is None:
+        say(f"No {os_name()} versions are published on github.com/{repo} yet.")
+    elif release["key"] > (version_key(installed) or (0,)):
+        say(f"A new version is out: {release['version']} (installed: {installed}).")
+        say("It installs by itself within a few hours, or now with: sudo myos-update")
+    else:
+        say(f"{os_name()} is up to date (version {installed}).")
+    return 0
+
+
+def status() -> int:
+    conf = read_conf(CONF)
+    st = load_status()
+    say(f"Installed version: {installed_version()}")
+    say(f"Updates from:      {('github.com/' + conf['REPO']) if conf.get('REPO') else 'nowhere (not set up)'}")
+    say(f"Automatic:         {'off (AUTO=no)' if conf.get('AUTO', 'yes').lower() == 'no' else 'on, every few hours'}")
+    if st.get("last_check"):
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(st["last_check"]))
+        result = {"up-to-date": "up to date", "updated": f"installed {st.get('latest', '')}",
+                  "failed": f"installing {st.get('failed_version', '')} failed: {st.get('message', '')}",
+                  "error": st.get("message", "")}.get(st.get("last_result"), st.get("last_result", ""))
+        say(f"Last check:        {when}, {result}")
+    else:
+        say("Last check:        never")
+    return 0
+
+
+def install(auto: bool) -> int:
+    conf = read_conf(CONF)
+    if auto and conf.get("AUTO", "yes").strip().lower() == "no":
+        say(f"Automatic updates are switched off (AUTO=no in {CONF}).")
+        return 0
+    if os.geteuid() != 0 and ROOT == Path("/"):
+        say("Installing updates needs admin rights: sudo myos-update")
+        return 1
+    try:
+        repo = repo_from(conf)
+    except UpdateError as e:
+        say(f"{e}.")
+        return 1
+    if not repo:
+        say(f"Automatic updates are not set up (no REPO in {CONF}).")
+        return 0
+    lock = take_lock()
+    if lock is None:
+        say("Another update is running already.")
+        return 0
+    try:
+        return _install(repo, auto)
+    finally:
+        os.close(lock)
+
+
+def _install(repo: str, auto: bool) -> int:
+    now = int(time.time())
+    installed = installed_version()
+    try:
+        release = newest_release(repo)
+    except UpdateError as e:
+        save_status(last_check=now, last_result="error", message=str(e))
+        say(f"Could not look for updates: {e}.")
+        return 0 if auto else 1          # offline is normal; the timer tries again later
+    if release is None or release["key"] <= (version_key(installed) or (0,)):
+        save_status(last_check=now, last_result="up-to-date", message="",
+                    latest=release["version"] if release else "")
+        say(f"{os_name()} is up to date (version {installed}).")
+        return 0
+    version = release["version"]
+    st = load_status()
+    if auto and st.get("failed_version") == version and now - int(st.get("failed_at") or 0) < RETRY_FAILED_AFTER:
+        say(f"Version {version} did not install last time; trying again later (or now: sudo myos-update).")
+        return 0
+    say(f"Installing {os_name()} {version} (installed: {installed}).")
+    shutil.rmtree(CACHE, ignore_errors=True)
+    CACHE.mkdir(parents=True, mode=0o700)
+    try:
+        tree = unpack(download(release, repo, CACHE), CACHE, version)
+        if snapshot(version):
+            say("Took a snapshot of the system first, to go back to if needed.")
+        with ShutdownWaits() as shield:
+            code = apply(tree, version)
+        if code != 0:
+            raise UpdateError(f"installing it failed (updates/apply.sh ended with code {code})")
+        set_version(version)
+        save_status(last_check=now, last_result="updated", latest=version, message="",
+                    failed_version="", failed_at=0, updated_at=int(time.time()))
+        say(f"Done: {os_name()} {version} is installed.")
+        if auto:
+            notify(f"{os_name()} was updated", f"Version {version} is installed. "
+                   "Some changes show after the next sign-in.")
+        if shield.asked:
+            say("Stopping now, as the computer is shutting down.")
+        return 0
+    except UpdateError as e:
+        save_status(last_check=now, last_result="failed", message=str(e), failed_version=version, failed_at=now)
+        say(f"Version {version} was not installed: {e}.")
+        return 1
+    finally:
+        shutil.rmtree(CACHE, ignore_errors=True)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="myos-update", description=__doc__.split("\n\n")[0])
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="only say whether a new version is out")
+    mode.add_argument("--status", action="store_true", help="the installed version and the last check")
+    mode.add_argument("--auto", action="store_true", help="what the timer runs (respects AUTO=no)")
+    args = parser.parse_args(argv)
+    if args.check:
+        return check()
+    if args.status:
+        return status()
+    return install(auto=args.auto)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,9 +1,26 @@
-# Build the ISO on GitHub's servers: Actions tab > "Build ISO" > Run workflow.
-# The ISO appears as a downloadable artifact of the run (kept 7 days).
+# Builds MyOS on GitHub's servers whenever a change reaches the main branch, or by hand:
+# Actions tab > "Build ISO" > Run workflow. When the tests pass and the build works:
+#   - the ISO is a download of the run (Artifacts, kept 30 days), for new installs;
+#   - a release with the update package is published. Installed MyOS systems look for
+#     new releases every few hours and install them by themselves (updates/bin/myos-update).
 name: Build ISO
 
 on:
+  push:
+    branches: [main]
+    # Changes to these alone do not make a new version.
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
   workflow_dispatch:
+
+# A newer change replaces a build that is still running.
+concurrency:
+  group: build-iso
+  cancel-in-progress: true
+
+permissions:
+  contents: write          # to publish the release
 
 jobs:
   build:
@@ -11,6 +28,22 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+
+      - name: Version number (date and run number)
+        id: version
+        run: |
+          version="$(date -u +%Y.%m.%d)-${GITHUB_RUN_NUMBER}"
+          echo "$version" > VERSION
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building MyOS $version"
+
+      - name: Run the tests
+        run: |
+          for d in */tests; do
+            echo "::group::${d%/tests}"
+            (cd "${d%/tests}" && python3 -m unittest discover -s tests)
+            echo "::endgroup::"
+          done
 
       - name: Free disk space (the build needs about 25 GB)
         run: |
@@ -24,10 +57,30 @@ jobs:
       - name: Upload the ISO
         uses: actions/upload-artifact@v4
         with:
-          name: iso
+          name: myos-${{ steps.version.outputs.version }}
           path: |
             out/*.iso
             out/*.sha256
             out/build.log
           compression-level: 0
-          retention-days: 7
+          retention-days: 30
+
+      # The update package is the whole project at this version; updates/apply.sh in it
+      # installs it on a running MyOS. (The ISO is too big for a release: 2 GB per file.)
+      - name: Publish the update
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git archive --format=tar.gz --prefix=myos/ --add-file=VERSION -o out/myos-update.tar.gz HEAD
+          (cd out && sha256sum myos-update.tar.gz > myos-update.tar.gz.sha256)
+          {
+            echo "Built from $(git log -1 --format='%h: %s')"
+            echo
+            echo "Installed systems install this version by themselves within a few hours (or right away: \`sudo myos-update\`)."
+            echo
+            echo "The ISO for new installs is a download of [this build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) (Artifacts, kept 30 days)."
+          } > out/notes.md
+          gh release create "v$VERSION" out/myos-update.tar.gz out/myos-update.tar.gz.sha256 \
+            --target "$GITHUB_SHA" --title "MyOS $VERSION" --notes-file out/notes.md --latest

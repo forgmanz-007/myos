@@ -14,3 +14,5 @@ GRUB_TIMEOUT=2
 CFG
 
 systemctl enable myos-firstboot.service
+# New MyOS versions from GitHub, every few hours (updates/; not in the live session).
+systemctl enable myos-update.timer

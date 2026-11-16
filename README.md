@@ -19,6 +19,7 @@ Rename it by changing `OS_NAME` in [config.env](config.env).
 | **Windows programs** | The first time an .exe starts, it is checked with **ClamAV**, **VirusTotal** and **ANY.RUN**, then it runs with **Wine** or **Proton**. Later starts go straight to the program (until it is updated); scan it again whenever you like. Right-click → **Properties** → **Windows compatibility** has the "Run this program with Proton" switch. GE-Proton is built in. Running `./setup.exe` in a terminal goes through the same check. |
 | **Video wallpapers** | Right-click a video in File Explorer → **Set as Wallpaper**, or ask the AI (*"set this video as my wallpaper"*). Videos loop, start muted, and pause while a window is maximized or fullscreen, which saves power and keeps games fast. For a playlist, speed, blur or a lock-screen video, right-click the desktop → **Desktop and Wallpaper**. Uses the [Smart Video Wallpaper Reborn](https://github.com/luisbocanegra/plasma-smart-video-wallpaper-reborn) plugin. |
 | **Installer** | A graphical installer (Calamares) on the USB stick. Btrfs by default, so snapshots work. |
+| **Automatic updates** | When a new version of MyOS builds on GitHub, installed PCs install it by themselves within a few hours: the apps, settings and look. A snapshot is taken first, and a quiet note in the notification history (no pop-up) says when it happened. `myos-update --status` shows the version, `sudo myos-update` installs a new one right away. See [Updates](#updates). |
 
 <p>
 <img src="docs/desktop-start-menu.png" width="32%" alt="Start menu with tiles">
@@ -63,9 +64,9 @@ KDE's own look, and **Windows 10 Style** back.
   Enter keys in ClamAV Security → Windows programs. Only a file's fingerprint is sent, unless you
   choose to upload the file.
 - **Tested so far:**
-  - 254 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
-    speed and memory 33) on Qt 6.8.2, the version in Debian 13. All 46 shell scripts pass
-    shellcheck without warnings.
+  - 282 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
+    speed and memory 33, updates 28) on Qt 6.8.2, the version in Debian 13. All 48 shell scripts
+    pass shellcheck without warnings. GitHub runs them before every build.
   - **The ISO builds**: on GitHub (Actions → Build ISO) in 20 minutes, 5.7 GiB, with the Linux 7.2
     kernel from backports, GE-Proton 11-12 for x86_64, Firefox, Ollama, ClamAV signatures, the
     Properties tab and the whole Windows 10 look (all build steps reported success).
@@ -224,11 +225,14 @@ On Debian 13 you can also run `./build.sh --native`.
 
 **On a Mac:** it works with Docker Desktop, but Apple Silicon has to emulate a PC, which takes several hours.
 
-**Without installing anything (GitHub):** put this folder in a GitHub repository, open
-**Actions → Build ISO → Run workflow**, and download the ISO from the finished run. This works
-best with a public repository; private ones on a free account have little artifact storage.
+**Without installing anything (GitHub):** put this folder in a GitHub repository. Every change
+pushed to its main branch is tested and built (or open **Actions → Build ISO → Run workflow**);
+download the ISO from the finished run under **Artifacts** (kept 30 days). Each build that works
+is also published as an update for installed PCs (see [Updates](#updates)). This works best with
+a public repository; private ones on a free account have little artifact storage.
 
-The ISO lands in `out/` (for example `out/myos-20261105-amd64.iso`, plus a `.sha256` checksum).
+The ISO lands in `out/` (for example `out/myos-20261105-amd64.iso`, plus a `.sha256` checksum;
+GitHub's builds carry the version instead of the date: `myos-2026.11.16-7-amd64.iso`).
 
 ## 2. Install it
 
@@ -255,6 +259,49 @@ with the same install scripts, but not yet from a built ISO, so check these once
 If something looks like plain KDE instead, search `out/build.log` on the build PC for
 `0420-windows10-look`: that step downloads the Start menu, icons and font. A network hiccup is
 the usual cause; run `./build.sh` again.
+
+## Updates
+
+**New versions reach every installed PC by themselves.** Change the project and push it to the
+main branch on GitHub: the workflow runs the tests, builds the ISO, and when that works publishes
+a release named after the date and run number (for example `v2026.11.16-7`) with the update
+package (the whole project at that version). Changes to README.md or docs/ alone make no new
+version.
+
+On each installed PC, `myos-update` looks for a newer release 10 minutes after the start and
+then every 6 hours (not on battery, and not in the USB stick's live session). When there is one,
+it downloads the package, checks its checksum, takes a snapshot (Btrfs), and runs the package's
+`updates/apply.sh`, which:
+1. installs the new DeepSeek Shell, ClamAV Security, Task Manager, speed settings, desktop and
+   updater with the settings the ISO was built with (`/etc/myos/build.conf`);
+2. downloads or compiles again what the ISO build downloads or compiles (Start menu, icons, font,
+   video wallpaper plugin, Properties tab), but only when the files those come from changed;
+3. runs the new one-time changes in `updates/migrations/` (for example installing a Debian
+   package that a new version adds; see the README there).
+
+Some changes (taskbar, Start menu) show after the next sign-in. If installing fails, the PC keeps
+its version and tries again a day later; a shutdown waits for an install that is under way.
+
+```bash
+myos-update --status
+```
+
+```bash
+sudo myos-update
+```
+
+The first shows the installed version and the last check, the second installs a new version
+right away (`myos-update --check` only looks). To stop the automatic installs, set `AUTO=no` in
+`/etc/myos/update.conf`. Where PCs look is `UPDATE_REPO` in [config.env](config.env) (your
+repository; empty = no automatic updates).
+
+Good to know:
+- Whoever can push to the repository's main branch can change every installed MyOS (updates
+  install as admin). Protect the GitHub account with two-factor sign-in.
+- Debian's own packages (Firefox, KDE, the kernel, security fixes) are not part of this. Ask the
+  AI to "update everything", or run `sudo apt update && sudo apt full-upgrade`.
+- A PC installed from an ISO built before the updater existed (`myos-20261115-amd64.iso`) does not
+  update itself: install from a newer ISO.
 
 ## Windows 10 shortcuts
 
@@ -436,7 +483,7 @@ Tools are plain JSON files in `~/.config/deepseek-shell/tools/`. The built-in ex
 Everything is in [config.env](config.env): OS name, `KERNEL` (backports = newest hardware support),
 `DEFAULT_MODEL`, `BUNDLE_MODEL` (puts the AI in the ISO for offline installs, +5 GB),
 `AMD_GPU_SUPPORT`, `FILE_MANAGER`, `BUNDLE_PROTON`, `CLAMAV_SIGNATURES`, `VIDEO_WALLPAPERS`,
-`EXTRA_PACKAGES`, language and keyboard.
+`UPDATE_REPO` (where installed PCs get new versions), `EXTRA_PACKAGES`, language and keyboard.
 
 ## Project layout
 
@@ -453,11 +500,14 @@ myos-security/              ClamAV Security, the .exe guard, Wine/Proton launche
 task-manager/               Task Manager (Python + Qt): processes, performance graphs, startup apps, services, tests
 performance/                speed and memory: compressed memory (zswap/zram), out-of-memory guard and warning,
                             Firefox tab unloading, visual effects tool, idle virus scanner stop, tests
+updates/                    automatic updates: myos-update and its timer, apply.sh (installs a new version on
+                            a running system), one-time changes (migrations/), tests
+.github/workflows/          the GitHub build: tests, ISO, and the release that installed PCs update from
 docs/                       screenshots
 ```
 
-DeepSeek Shell, ClamAV Security, Task Manager, the speed settings and the desktop setup each have
-an `install.sh`. You can also install them on an existing Debian 13 KDE system with `sudo ./install.sh`.
+DeepSeek Shell, ClamAV Security, Task Manager, the speed settings, the desktop setup and the
+updater each have an `install.sh`. You can also install them on an existing Debian 13 KDE system with `sudo ./install.sh`.
 
 Run the tests (needs PyQt6):
 
@@ -479,6 +529,10 @@ cd task-manager && python3 -m unittest discover tests
 
 ```bash
 cd performance && python3 -m unittest discover tests
+```
+
+```bash
+cd updates && python3 -m unittest discover tests
 ```
 
 ## If the build fails

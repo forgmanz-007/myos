@@ -159,7 +159,8 @@ class KnowledgeTests(unittest.TestCase):
                  "install spotify": "install-apps", "undo the last change": "snapshots-undo",
                  "scan for viruses": "virus-protection", "steam games": "gaming",
                  "bluetooth headphones won't pair": "bluetooth", "clock wrong after windows": "dual-boot",
-                 "ai is very slow": "ai-engine", "file explorer": "optional-apps"}
+                 "ai is very slow": "ai-engine", "file explorer": "optional-apps",
+                 "is there a new myos version": "updates"}
         for q, expected in cases.items():
             self.assertEqual(self.first(q), expected, q)
 
