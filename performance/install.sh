@@ -18,6 +18,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 install -Dm755 "$HERE/bin/myos-performance" "$DESTDIR/usr/bin/myos-performance"
 install -Dm755 "$HERE/libexec/clamd-idle-stop" "$DESTDIR/usr/libexec/myos/clamd-idle-stop"
+# Python bytecode for faster app starts (run by the ISO build's last hook and by updates).
+install -Dm755 "$HERE/libexec/python-bytecode" "$DESTDIR/usr/libexec/myos/python-bytecode"
 install -Dm644 "$HERE/systemd/myos-clamd-idle.service" "$DESTDIR/usr/lib/systemd/system/myos-clamd-idle.service"
 install -Dm644 "$HERE/systemd/myos-clamd-idle.timer" "$DESTDIR/usr/lib/systemd/system/myos-clamd-idle.timer"
 install -Dm644 "$HERE/etc/60-myos-memory.conf" "$DESTDIR/etc/sysctl.d/60-myos-memory.conf"

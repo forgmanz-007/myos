@@ -1,0 +1,27 @@
+#!/bin/sh
+# Prepares the Python bytecode (.pyc files) of MyOS's built-in apps and of Debian's Python (its
+# standard library and packages such as PyQt6). Users can't write to /usr, so without these
+# files every start of DeepSeek Shell, Task Manager or ClamAV Security compiles all of that
+# code again in memory: measured 3-4 times slower to load, about 0.3 s more per start.
+#
+# Run as admin by the ISO build (hook 9900, after live-build's own 9010-remove-python-pyc has
+# deleted every .pyc file under /usr "to save some space", about 35 MB) and by every update
+# (updates/apply.sh). Files that are up to date already are skipped, so later runs are quick.
+set -u
+dirs=${MYOS_BYTECODE_DIRS:-}
+if [ -z "$dirs" ]; then
+    stdlib=$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))' 2>/dev/null) || stdlib=""
+    dirs="$stdlib /usr/lib/python3/dist-packages /usr/lib/deepseek-shell /usr/lib/myos-security /usr/lib/myos-taskmanager"
+fi
+for d in $dirs; do
+    [ -d "$d" ] || continue
+    # All processors at once; one at a time where that is not possible (no /dev/shm in some
+    # build environments). Files that are not Python 3 (some packages ship examples or test
+    # data) are skipped, as Debian's own py3compile does, so their errors are not shown.
+    python3 -m compileall -q -j0 "$d" >/dev/null 2>&1 || python3 -m compileall -q "$d" >/dev/null 2>&1 || true
+done
+count=0
+for d in $dirs; do
+    if [ -d "$d" ]; then count=$((count + $(find "$d" -name '*.pyc' | wc -l))); fi
+done
+echo "Python bytecode ready: $count files."

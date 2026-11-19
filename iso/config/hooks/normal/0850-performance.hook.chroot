@@ -29,9 +29,6 @@ systemctl enable fstrim.timer 2>/dev/null || true
 #    kernel closes the app using the most (set up by memory-setup).
 systemctl enable myos-memory.service
 
-# 5. The built-in apps are Python programs. Prepare their bytecode now, so they
-#    don't compile themselves on every start (users can't write to /usr/lib).
-for d in /usr/lib/deepseek-shell /usr/lib/myos-security /usr/lib/myos-taskmanager; do
-    if [ -d "$d" ]; then python3 -m compileall -q "$d" || true; fi
-done
+# 5. The apps' Python bytecode is made by the last hook, 9900-python-bytecode: live-build's
+#    own 9010-remove-python-pyc would delete it if it were made here.
 echo "Speed settings applied."

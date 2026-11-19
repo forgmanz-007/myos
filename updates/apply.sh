@@ -137,9 +137,8 @@ if [ "$SEED" = yes ]; then
 fi
 if [ -z "$DESTDIR" ]; then
     systemctl daemon-reload || true
-    for d in /usr/lib/deepseek-shell /usr/lib/myos-security /usr/lib/myos-taskmanager; do
-        if [ -d "$d" ]; then python3 -m compileall -q "$d" >/dev/null || true; fi
-    done
+    # The apps' and Python's bytecode (ISOs up to 2026.11.16-6 shipped without it).
+    /usr/libexec/myos/python-bytecode || true
     if command -v update-desktop-database >/dev/null; then update-desktop-database -q || true; fi
     if command -v gtk-update-icon-cache >/dev/null; then
         gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true

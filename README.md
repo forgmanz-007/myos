@@ -64,8 +64,8 @@ KDE's own look, and **Windows 10 Style** back.
   Enter keys in ClamAV Security → Windows programs. Only a file's fingerprint is sent, unless you
   choose to upload the file.
 - **Tested so far:**
-  - 283 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
-    speed and memory 33, updates 29) on Qt 6.8.2, the version in Debian 13. All 48 shell scripts
+  - 285 automated tests pass (DeepSeek Shell 54, ClamAV Security 50, desktop 65, Task Manager 52,
+    speed and memory 35, updates 29) on Qt 6.8.2, the version in Debian 13. All 48 shell scripts
     pass shellcheck without warnings. GitHub runs them before every build.
   - **The ISO builds**: on GitHub (Actions → Build ISO) in 20 minutes, 5.7 GiB, with the Linux 7.2
     kernel from backports, GE-Proton 11-12 for x86_64, Firefox, Ollama, ClamAV signatures, the
@@ -187,7 +187,11 @@ KDE's own look, and **Windows 10 Style** back.
     ARM downloads, and the ARM one was taken (now always the x86_64 one, checked by its checksum).
     The first automatic build was refused by GitHub's API (its hourly limit for anonymous
     requests, which GitHub's build machines share), so the build now uses its own short-lived
-    token, which never goes into the ISO.
+    token, which never goes into the ISO. Its log also showed that live-build's own last steps
+    delete all of Python's precompiled files (.pyc) "to save some space", including the ones made
+    for the built-in apps: each app then loaded 3-4 times slower (about 0.3 s more per start). They
+    are now made again after that step (a few seconds), and every update makes them too, so a PC
+    installed from the 2026.11.16-6 ISO gets them with its first update.
   - **Not tested yet:**
     - booting and installing the ISO on a PC (installer, Secure Boot, the 2-second boot menu);
     - an automatic update on a PC installed from the ISO, including the snapshot taken first

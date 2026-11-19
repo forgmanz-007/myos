@@ -592,5 +592,44 @@ class SettingsFiles(unittest.TestCase):
         self.assertIn('Environment="OLLAMA_KEEP_ALIVE=5m"', unit)
 
 
+class PythonBytecode(unittest.TestCase):
+    """libexec/python-bytecode: the .pyc files that live-build deletes, made again."""
+
+    def run_script(self, dirs):
+        env = dict(os.environ, MYOS_BYTECODE_DIRS=" ".join(str(d) for d in dirs), PATH=REAL_PATH)
+        return subprocess.run(["sh", str(ROOT / "libexec/python-bytecode")], env=env,
+                              capture_output=True, text=True, timeout=120)
+
+    def test_compiles_and_skips_what_is_not_python_3(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app, other = Path(tmp, "app"), Path(tmp, "other")
+            (app / "pkg").mkdir(parents=True)
+            other.mkdir()
+            (app / "main.py").write_text("X = 1\n")
+            (app / "pkg/__init__.py").write_text("")
+            (other / "example.py").write_text("print 'Python 2'\n")      # some packages ship such files
+            r = self.run_script([app, other, Path(tmp, "missing")])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(r.stdout, "Python bytecode ready: 2 files.\n")
+            self.assertEqual(sorted(p.name.split(".")[0] for p in Path(tmp).rglob("*.pyc")), ["__init__", "main"])
+            # Again (every update runs it): nothing new, same answer.
+            self.assertEqual(self.run_script([app, other]).stdout, "Python bytecode ready: 2 files.\n")
+
+    def test_installed_and_run_last_in_the_iso_build(self):
+        self.assertIn('"$HERE/libexec/python-bytecode" "$DESTDIR/usr/libexec/myos/python-bytecode"',
+                      (ROOT / "install.sh").read_text())
+        hooks = ROOT.parent / "iso/config/hooks/normal"
+        last = hooks / "9900-python-bytecode.hook.chroot"
+        self.assertIn("\n/usr/libexec/myos/python-bytecode\n", last.read_text())
+        # "lb config" puts live-build's own hooks into the same folder; they run in name order,
+        # and 9010-remove-python-pyc deletes every .pyc file under /usr.
+        names = [p.name for p in hooks.glob("*.hook.chroot")] + ["9010-remove-python-pyc.hook.chroot",
+                                                                 "9020-remove-man-cache.hook.chroot"]
+        self.assertEqual(max(names), last.name)
+        self.assertNotIn("compileall", (hooks / "0850-performance.hook.chroot").read_text())
+        self.assertIn("\n    /usr/libexec/myos/python-bytecode || true\n",
+                      (ROOT.parent / "updates/apply.sh").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,7 @@
+#!/bin/bash
+# Python bytecode, so the built-in apps start without compiling themselves first. It has to
+# be the last hook: live-build's own 9010-remove-python-pyc (copied into this folder by
+# "lb config") deletes every .pyc file under /usr, which made each start of DeepSeek Shell,
+# Task Manager and ClamAV Security about 0.3 s slower. See performance/libexec/python-bytecode.
+set -euo pipefail
+/usr/libexec/myos/python-bytecode
